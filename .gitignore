@@ -1,0 +1,21 @@
+venv/
+env/
+app_env/
+*.pyc
+__pycache__/
+instance/
+.DS_Store
+.pytest_cache/
+.coverage
+htmlcov/
+package-lock.json
+dist/
+build/
+*.egg-info/
+.vscode/
+get-pip.py
+python-giggle/
+UCSC_utilities/
+data/
+.ipynb_checkpoints/
+UCSC Genome Data API Retrieval.ipynb
