@@ -3,15 +3,23 @@ from application.config import config
 # Libraries for scheduling
 from flask_apscheduler import APScheduler
 import datetime
+# Libraries for sql db
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config.from_object(config)
-app.config['TESTING'] = True
+app.config['TESTING'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
-from application import utility
-from application import routes
+from application import models, utility, routes
 
-utility.setup_indices()
+db.drop_all()
+db.create_all()
+if app.config['TESTING'] == False:
+    utility.setup_indices()
 
 # Scheduling logic for updating
 # scheduler = APScheduler()

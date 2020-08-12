@@ -7,6 +7,20 @@ def home():
 
 @app.route('/<page_name>')
 def other_page(page_name):
-    response = make_response('The page named %s does not exist.' \
-                             % page_name, 404)
-    return response
+    pass
+
+@app.route('/sources')
+def sources(page_name):
+    pass
+
+@app.route('/{}/genomes')
+def genomes(source):
+    pass
+
+@app.route('/{}/{}/tracks')
+def genomes(source):
+    pass
+
+@app.route('/{}/{}/indices')
+def genomes(source):
+    pass

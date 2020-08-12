@@ -17,5 +17,5 @@ get-pip.py
 python-giggle/
 UCSC_utilities/
 data/
-.ipynb_checkpoints/
-UCSC Genome Data API Retrieval.ipynb
+./.ipynb_checkpoints/
+./UCSC Genome Data API Retrieval.ipynb

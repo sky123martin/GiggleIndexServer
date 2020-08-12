@@ -34,29 +34,29 @@ class BasicTests(unittest.TestCase):
     # modified API structure.
     def test_UCSC_API_genomes(self):
         # testing if genome directory exists
-        r = requests.get('https://api.genome.ucsc.edu/list/ucscGenomes')
+        r = requests.get(app.config["UCSC_API"]+'/list/ucscGenomes')
         self.assertEqual(r.status_code, requests.codes.ok)
-        r = requests.get('https://api.genome.ucsc.edu/list/fakeURL')
+        r = requests.get(app.config["UCSC_API"]+'/list/fakeURL')
         self.assertEqual(r.status_code, 400)
 
     def test_UCSC_API_track_structure(self):
         # testing if track structure holds
         genome = "rn6"
-        r = requests.get('https://api.genome.ucsc.edu/list/tracks?genome={};trackLeavesOnly=1'.format("rn6"))
+        r = requests.get('{}list/tracks?genome={};trackLeavesOnly=1'.format(app.config["UCSC_API"], "rn6"))
         self.assertEqual(r.status_code, requests.codes.ok)
         rn6_leaves = r.json()["rn6"]
-        r = requests.get('https://api.genome.ucsc.edu/list/tracks?genome={}'.format("rn6"))
+        r = requests.get('{}/list/tracks?genome={}'.format(app.config["UCSC_API"], "rn6"))
         rn6_full = r.json()["rn6"]
         self.assertTrue(len(rn6_leaves) > len(rn6_full))
 
     def test_UCSC_API_all_tracks(self):
         # testing that /genomes listed can link to /tracks
-        r = requests.get('https://api.genome.ucsc.edu/list/ucscGenomes')
+        r = requests.get(app.config["UCSC_API"]+'/list/ucscGenomes')
         self.assertEqual(r.status_code, requests.codes.ok)
         all_genomes = r.json()["ucscGenomes"]
         # Only chosing acouple to check because hg19 delay, normal delay
         for key in random.choices(list(all_genomes.keys()), k=3):
-            track = requests.head('https://api.genome.ucsc.edu/list/tracks?genome={}'.format(key), timeout=45.00)
+            track = requests.head('{}/list/tracks?genome={}'.format(app.config["UCSC_API"], key), timeout=45.00)
             self.assertEqual(track.status_code, requests.codes.ok)
 
     #############################
@@ -72,8 +72,8 @@ class BasicTests(unittest.TestCase):
 
     def test_UCSC_SQL_connection(self):
         # test that current UCSC connection works
-        host = "genome-mysql.soe.ucsc.edu"
-        user = "genome"
+        host = app.config["UCSC_SQL_DB_HOST"]
+        user = app.config["UCSC_SQL_DB_USER"]
         with utility.connect_SQL_db(host, user) as db:
             mycursor = db.cursor()
             mycursor.execute("SHOW DATABASES")
@@ -81,8 +81,8 @@ class BasicTests(unittest.TestCase):
 
     def test_UCSC_SQL_databases(self):
         # test thatincorrect query throws
-        host = "genome-mysql.soe.ucsc.edu"
-        user = "genome"
+        host = app.config["UCSC_SQL_DB_HOST"]
+        user = app.config["UCSC_SQL_DB_USER"]
         with utility.connect_SQL_db(host, user) as db:
             mycursor = db.cursor()
             mycursor.execute("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA\
@@ -96,65 +96,67 @@ class BasicTests(unittest.TestCase):
         # Local test of target_columns
         file_type = "chain ailMel1"
         columns = ['bin', 'score', 'tName', 'tSize', 'tStart', 'tEnd', 'qName', 'qSize', 'qStrand', 'qStart', 'qEnd', 'id']
-        expected_result = ['tName', 'tStart', 'tEnd', 0]
+        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
         result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "netAlign panTro5 chainPanTro5"
         columns = ['bin', 'level', 'tName', 'tStart', 'tEnd', 'strand', 'qName', 'qStart', 'qEnd', 'chainId', 'ali', 'score', 'qOver', 'qFar', 'qDup', 'type', 'tN', 'qN', 'tR', 'qR', 'tNewR', 'qNewR', 'tOldR', 'qOldR', 'tTrf', 'qTrf']
         expected_result = ['tName', 'tStart', 'tEnd', 0]
+        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
         result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "bed 4 +"
         columns = ['bin', 'chrom', 'chromStart', 'chromEnd', 'name', 'period', 'copyNum', 'consensusSize', 'perMatch', 'perIndel', 'score', 'A', 'C', 'G', 'T', 'entropy', 'sequence']
         expected_result = ['chrom', 'chromStart', 'chromEnd', 0]
+        expected_result = {"chrom": "chrom", "start": "chromStart", "end": "chromEnd", "base shift": 0}
         result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "bed 4"
         columns = ['chrom', 'chromStart', 'chromEnd', 'name']
-        expected_result = ['chrom', 'chromStart', 'chromEnd', 0]
+        expected_result = {"chrom": "chrom", "start": "chromStart", "end": "chromEnd", "base shift": 0}
         result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "psl est"
         columns = ['bin', 'matches', 'misMatches', 'repMatches', 'nCount', 'qNumInsert', 'qBaseInsert', 'tNumInsert', 'tBaseInsert', 'strand', 'qName', 'qSize', 'qStart', 'qEnd', 'tName', 'tSize', 'tStart', 'tEnd', 'blockCount', 'blockSizes', 'qStarts', 'tStarts']
-        expected_result = ['tName', 'tStart', 'tEnd', 0]
+        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
         result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "genePred genscanPep"
         columns = ['bin', 'name', 'chrom', 'strand', 'txStart', 'txEnd', 'cdsStart', 'cdsEnd', 'exonCount', 'exonStarts', 'exonEnds']
-        expected_result = ['chrom', 'txStart', 'txEnd', 0]
+        expected_result = {"chrom": "chrom", "start": 'txStart', "end": 'txEnd', "base shift": 0}
         result =  utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "rmsk"
         columns = ['bin', 'swScore', 'milliDiv', 'milliDel', 'milliIns', 'genoName', 'genoStart', 'genoEnd', 'genoLeft', 'strand', 'repName', 'repClass', 'repFamily', 'repStart', 'repEnd', 'repLeft', 'id']
-        expected_result = ['genoName', 'genoStart', 'genoEnd', 0]
-        result =  utility.target_columns(columns, file_type)
+        expected_result = {"chrom": 'genoName', "start": 'genoStart', "end": 'genoEnd', "base shift": 0}
+        result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "GFF"
         columns = ["start", "end", "chrom"]
-        expected_result = ["chrom", "start", "end", -1]
-        result =  utility.target_columns(columns, file_type)
+        expected_result = {"chrom": "chrom", "start": "start", "end": "end", "base shift": -1}
+        result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "MAF"
         columns = ["start", "end", "chrom"]
-        expected_result = ["chrom", "start", "end", 0]
-        result =  utility.target_columns(columns, file_type)
+        expected_result = {"chrom": "chrom", "start": "start", "end": "end", "base shift": 0}
+        result = utility.target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
     def test_UCSC_target_columns(self):
         # Integration test of both target_columns and UCSC servers
         # Iterate through a genome in UCSC and make sure target_columns runs
-        with utility.connect_SQL_db("genome-mysql.soe.ucsc.edu", "genome") as db:
+        with utility.connect_SQL_db(app.config["UCSC_SQL_DB_HOST"], app.config["UCSC_SQL_DB_USER"]) as db:
             test_genomes = ["rn6"]
             for genome in test_genomes:  # iterate through all genomes being checked
-                tracks_info = requests.get(url="https://api.genome.ucsc.edu/list/tracks?genome={};trackLeavesOnly=1".format(genome)).json()[genome]
+                tracks_info = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(app.config["UCSC_API"], genome)).json()[genome]
                 # unzip track details and names
                 for track, track_info in tracks_info.items():
                     # sometimes table lists the track name instead of the key of the dict
@@ -166,16 +168,22 @@ class BasicTests(unittest.TestCase):
                         if len(columns) > 2: # Some files just don't have any info on them
                             result = utility.target_columns(columns, track_info["type"])
                             self.assertTrue([result])
+
     ####################
     # Config Variables #
     ####################
+
     def test_CONFIG_VAR_MAX_INTERVAL_PER_INDEX(self):
         self.assertGreater(app.config["MAX_INTERVALS_PER_INDEX"], 0)
         genome = "rn6"
-        tracks_info = requests.get(url="https://api.genome.ucsc.edu/list/tracks?genome={};trackLeavesOnly=1".format(genome)).json()[genome]
+        tracks_info = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(app.config["UCSC_API"], genome)).json()[genome]
         # unzip track details and names
         for track, track_info in tracks_info.items():
             self.assertGreaterEqual(app.config["MAX_INTERVALS_PER_INDEX"], track_info["itemCount"])
+  
+    ##################
+    # Indexing Tests #
+    ##################
 
     def test_cluster_data(self):
         testing_size = app.config["MAX_INTERVALS_PER_INDEX"]/2
@@ -199,6 +207,7 @@ class BasicTests(unittest.TestCase):
         source = "kitchen"
         clusters = utility.cluster_data(source, genome, files_info)
         expected_clusters = {source + "_" + genome+".1": {
+                                "full": True,
                                 "files": {
                                     "bannana": {
                                         "file_size": testing_size, 
@@ -212,6 +221,7 @@ class BasicTests(unittest.TestCase):
                                     }},
                                 "index_size": testing_size + 1.1*testing_size},
                              source + "_" + genome+".2": {
+                                 "full": False,
                                  "files": {
                                     "apple": {
                                         "file_size": testing_size, 
@@ -222,10 +232,9 @@ class BasicTests(unittest.TestCase):
                           }                     
         self.assertTrue(expected_clusters == clusters)
 
-
-    ##################
-    # Indexing Tests #
-    ##################
+    ############
+    # DB Tests #
+    ############
 
     ##################
     # Updating Tests #
