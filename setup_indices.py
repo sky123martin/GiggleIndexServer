@@ -182,7 +182,6 @@ def UCSC_download_bigDataUrl_file(index, params):
         os.system("UCSC_utilities/bigBedToBed http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
     elif "bigWig" in file_type:
         os.system("UCSC_utilities/bigWigToBedGraph http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
-        print(track)
     elif "bigPsl" in file_type:
         os.system("UCSC_utilities/bigPslToPsl http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".psl"))
         os.system("UCSC_utilities/pslToBed data/{}/{} data/{}/{}".format(index, track + ".psl", index, track + ".bed"))
@@ -236,10 +235,8 @@ def setup_index(source, genome, index, index_info):
         # create index directory
         try:
             os.mkdir("data/" + index)
-        except OSError:
-            print("Creation of the directory %s failed" % index)
+
         # add index info to the Index database
-        print(index_info)
         conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
             index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
         # iterate through all files belonging to the index and download them
@@ -265,10 +262,7 @@ def setup_index(source, genome, index, index_info):
             os.rmdir("data/"+index)
         bar.text("Index {} Completed".format(index))
         print("Index {} Completed".format(index))
-        
-        cursor = conn.execute("SELECT * from INDICES")
-        for row in cursor:
-            print(row)
+
 
                  
 def setup_UCSC_indices(genomes):
@@ -289,7 +283,6 @@ def LOCAL_download_file(index, params):
 
 def local_collect_file_info(path):
     file_list = glob.glob(os.path.join(path, "*.bed"))
-    print(file_list)
     files_info = {}
     for file_name in file_list:
         file_name = file_name.split("/")[-1]
@@ -301,7 +294,6 @@ def local_collect_file_info(path):
 
 def setup_local_indices(genomes):
     for genome, path in genomes.items():
-        print(genome, path)
         files_info = local_collect_file_info(path)
         clustered_files_info = cluster_data("local", genome, files_info)
         for index, index_info in clustered_files_info.items():
@@ -318,3 +310,5 @@ if __name__ == "__main__":
     global conn
     conn = sqlite3.connect('Indexing.db')
     setup_indices()
+    conn.commit()
+    conn.close()
