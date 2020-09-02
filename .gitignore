@@ -21,3 +21,4 @@ local/
 giggle/
 ./.ipynb_checkpoints/
 ./UCSC Genome Data API Retrieval.ipynb
+indexing.db
