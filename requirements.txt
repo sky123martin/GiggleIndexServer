@@ -1,3 +1,7 @@
-pybedtools
+mysql-connector-python
 pandas
-contextlib
+pybedtools
+requests
+alive-progress
+nose2
+unittest2

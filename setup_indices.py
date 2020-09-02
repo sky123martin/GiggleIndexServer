@@ -1,12 +1,17 @@
-from application.models import Files, Index
+from config import config
 import mysql.connector
 import pandas as pd
 from contextlib import contextmanager
-from application import app, db
 import requests 
-import glob, os, os.path
+import glob
+import os
+import os.path
 import pybedtools
 from alive_progress import alive_bar
+from datetime import date
+import sqlite3
+
+config = config
 
 @contextmanager
 def connect_SQL_db(host, user):
@@ -95,9 +100,9 @@ def cluster_data(source, genome, files_info):
 
     """
     with alive_bar(spinner = 'classic') as bar:
-        bar("Clustering genome {}".format(genome))
+        bar.text("Clustering genome {}".format(genome))
         clusters = {}
-        max_size = app.config["MAX_INTERVALS_PER_INDEX"]
+        max_size = config.MAX_INTERVALS_PER_INDEX
         num_indices = 1
         curr_index = source + "_" + genome + "." + str(num_indices)
         clusters[curr_index] = {"files": {}}
@@ -124,43 +129,21 @@ def cluster_data(source, genome, files_info):
     return clusters
 
 
-def UCSC_collect_file_info(genome):
-    tracks = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(app.config["UCSC_API"],genome)).json()[genome]
-    files_info = {}
-    with alive_bar(len(tracks), bar = 'bubbles', spinner = 'classic') as bar:
-        for track, info in tracks.items():
-            bar("Collecting file info for {}: {}".format(genome, track))
-            if "table" in info:
-                    track = info["table"]
-            if "bigDataUrl" in info: # if stored as a big data file
-                files_info[track] = {"file_size": info["itemCount"]}
-                files_info[track]["download_function"] = UCSC_get_big_data_file
-                files_info[track]["download_params"] = [track, genome, info["bigDataUrl"], info["type"]]
-            else: # if stored in sql db
-                with connect_SQL_db(app.config["UCSC_SQL_DB_HOST"], "genome") as db:
-                    columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
-                    if len(columns) > 2: # Some files just don't have any info on them
-                        files_info[track] = {"file_size": info["itemCount"]}
-                        extract_columns = target_columns(columns, info["type"])
-                        files_info[track]["download_function"] = UCSC_download_sql_file
-                        files_info[track]["download_params"] = [track, genome, extract_columns]
-    return files_info
-
-
 def UCSC_download_sql_file(index, params):
-    """ downloads a specific file and puts in index folder
+    """ downloads a specific file from UCSC sql db and stores in index folder
     Parameters
     ----------
     index: string
         ex. hg19_1
     params: list
         [track, genome, extract_columns]
-        extract_columns = [chrom, start, end, base_shift]
+        extract_columns =[chrom, start, end, base_shift]
     Returns
     -------
     nothing
 
     """
+    return
     track = params[0]
     genome = params[1]
     chrom = params[2]["chrom"]
@@ -168,14 +151,84 @@ def UCSC_download_sql_file(index, params):
     end = params[2]["end"]
     base_shift = params[2]["base shift"]
 
-    with connect_SQL_db(app.config["UCSC_SQL_DB_HOST"], "genome") as db:
+    with connect_SQL_db(configUCSC_SQL_DB_HOST, "genome") as db:
         df = pd.read_sql("Select {} AS chrom, {} + {} AS start, {} + {} AS end from {}.{}".format(chrom, start, base_shift, end, base_shift, genome, track), con=db)
         pybedtools.BedTool.from_dataframe(df).saveas('data/{}/{}.bed'.format(index, track))
 
 
-def UCSC_get_big_data_file(index, params):
-    pass
-    # print(index_name, track_name)
+def UCSC_download_bigDataUrl_file(index, params):
+    """ downloads a specific file from URL, converts to bed through,
+    UCSC Utilities folder and stores in index folder
+
+    Parameters
+    ----------
+    index: string
+        ex. hg19_1
+    params: list
+        [track, genome, bigDataUrl, file_type]
+    Returns
+    -------
+    nothing
+
+    """
+
+    file_type = params[3]
+    bigDataURL = params[2]
+    track = params[0]
+    # UCSC_utilities/bigBedToBed input_file output_file
+    # os.system("" [track, genome, info["bigDataUrl"], info["type"]]
+    if "bigBed" in file_type:
+        os.system("UCSC_utilities/bigBedToBed http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
+    elif "bigWig" in file_type:
+        os.system("UCSC_utilities/bigWigToBedGraph http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
+        print(track)
+    elif "bigPsl" in file_type:
+        os.system("UCSC_utilities/bigPslToPsl http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".psl"))
+        os.system("UCSC_utilities/pslToBed data/{}/{} data/{}/{}".format(index, track + ".psl", index, track + ".bed"))
+        os.remove("data/{}/{}".format(index, track + ".psl"))
+    else:
+        print("File {} of type not able to be converted".format(track, file_type))
+
+def UCSC_collect_file_info(genome):
+    """ uses UCSC API to gather download info for each track in a specific genome
+    Parameters
+    ----------
+    genome: string
+        ex. hg19
+
+    Returns
+    -------
+    files_info: dict of file information for each track, look st
+    """
+
+    tracks = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(config.UCSC_API,genome)).json()[genome]
+    files_info = {}
+    with alive_bar(len(tracks), bar='bubbles', spinner='classic') as bar:
+        for track, info in tracks.items():
+            bar.text("Collecting file info for {}: {}".format(genome, track))
+            bar()
+            if "table" in info:  # sometimes track name !=table name
+                track = info["table"]
+            if "bigDataUrl" in info: # if stored as a big data file
+                files_info[track] = {"file_size": info["itemCount"]}
+                                    # "download_function": UCSC_download_bigDataUrl_file}
+                files_info[track]["download_function"] = UCSC_download_bigDataUrl_file
+                files_info[track]["download_params"] = [track, genome, info["bigDataUrl"], info["type"]]
+            else:  # if stored in sql db
+                with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
+                    columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
+                    if len(columns) > 2:  # Some files just don't have any info on them
+                        files_info[track] = {"file_size": info["itemCount"]}
+                        extract_columns = target_columns(columns, info["type"])
+                        files_info[track]["download_function"] = UCSC_download_sql_file
+                        files_info[track]["download_params"] = [track, genome, extract_columns]
+                    elif "fileName" in columns:  # bigWig files do not like big data url in API, only in sql table
+                        big_data_URL = list(pd.read_sql("Select fileName from {}.{}".format(genome, track), con=db)["fileName"])[0]
+                        files_info[track] ={"file_size": info["itemCount"]}
+                        files_info[track]["download_function"] = UCSC_download_bigDataUrl_file
+                        files_info[track]["download_params"] = [track, genome, big_data_URL, info["type"]]
+    return files_info
+
 
 def setup_index(source, genome, index, index_info):
     with alive_bar(len(index_info["files"])+3, bar = 'blocks', spinner = 'classic') as bar:
@@ -185,23 +238,35 @@ def setup_index(source, genome, index, index_info):
         except OSError:
             print("Creation of the directory %s failed" % index)
         # add index info to the Index database
-        db.session.add(Index(id = index, source = source, genome = genome, size = index_info["index_size"], full = index_info["full"]))
+        conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index, 
+            index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
         # iterate through all files belonging to the index and download them
         for filename, file_info in index_info["files"].items():
-            bar("Creating {}: Downloading {}".format(index, filename))
-            file_info["download_function"](index, file_info["download_params"])
-            db.session.add(Files(tablename=filename, source="UCSC", genome=genome, size=file_info["file_size"], index_id=index))
+            bar.text("Creating {}: Downloading {}".format(index, filename))
+            bar()
+            file_info["download_function"](index_name, file_info["download_params"])
+            conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
+                VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(), 
+                source, genome, file_info["file_size"], index))
         # FIXME index downloaded files here
-        bar("Creating {}: indexing files".format(index))
+        
+        filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
+
+        bar.text("Creating {}: indexing files".format(index))
+        bar()
         if index_info["full"]:  # delete files if index is full
-            bar("Completed {}: deleting files".format(index))
-            filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
+            bar.text("Completed {}: deleting files".format(index))
+            bar()
+            filelist = glob.glob(os.path.join("data/"+index, "*"))
             for f in filelist:
                 os.remove(f)
             os.rmdir("data/"+index)
-        bar("Index {} Completed".format(index))
+        bar.text("Index {} Completed".format(index))
         print("Index {} Completed".format(index))
-        db.session.commit()
+        
+        cursor = conn.execute("SELECT * from INDICES")
+        for row in cursor:
+            print(row)
 
                  
 def setup_UCSC_indices(genomes):
@@ -212,13 +277,20 @@ def setup_UCSC_indices(genomes):
         for index, index_info in clustered_files_info.items():
             setup_index("UCSC", genome, index, index_info)
 
-        print(Files.query.all())
-        print(Index.query.all())
+def setup_local_indices(genomes):
+    for genome in genomes:
+        files_info = local_collect_file_info(genome)
 
 
 def setup_indices():
     """ Sets up all sources and genomes listed in CONFIG
     """
-    if len(app.config["UCSC_GENOMES"]) > 0:
-        setup_UCSC_indices(app.config["UCSC_GENOMES"])
+    setup_UCSC_indices(config.UCSC_GENOMES)
+    setup_local_indices(config.LOCAL_GENOMES)
+
+if __name__ == "__main__":
+    os.system('python models.py') # set up indexing and files database
+    global conn
+    conn = sqlite3.connect('Indexing.db')
+    setup_indices()
 
