@@ -10,6 +10,7 @@ import pybedtools
 from alive_progress import alive_bar
 from datetime import date
 import sqlite3
+from shutil import copyfile
 
 config = config
 
@@ -209,12 +210,12 @@ def UCSC_collect_file_info(genome):
             bar()
             if "table" in info:  # sometimes track name !=table name
                 track = info["table"]
-            if "bigDataUrl" in info: # if stored as a big data file
+            if "bigDataUrl" in info and info["itemCount"] > 0: # if stored as a big data file
                 files_info[track] = {"file_size": info["itemCount"]}
                                     # "download_function": UCSC_download_bigDataUrl_file}
                 files_info[track]["download_function"] = UCSC_download_bigDataUrl_file
                 files_info[track]["download_params"] = [track, genome, info["bigDataUrl"], info["type"]]
-            else:  # if stored in sql db
+            elif info["itemCount"] > 0:  # if stored in sql db
                 with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
                     columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
                     if len(columns) > 2:  # Some files just don't have any info on them
@@ -238,13 +239,14 @@ def setup_index(source, genome, index, index_info):
         except OSError:
             print("Creation of the directory %s failed" % index)
         # add index info to the Index database
-        conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index, 
+        print(index_info)
+        conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
             index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
         # iterate through all files belonging to the index and download them
         for filename, file_info in index_info["files"].items():
             bar.text("Creating {}: Downloading {}".format(index, filename))
             bar()
-            file_info["download_function"](index_name, file_info["download_params"])
+            file_info["download_function"](index, file_info["download_params"])
             conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
                 VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(), 
                 source, genome, file_info["file_size"], index))
@@ -277,10 +279,33 @@ def setup_UCSC_indices(genomes):
         for index, index_info in clustered_files_info.items():
             setup_index("UCSC", genome, index, index_info)
 
-def setup_local_indices(genomes):
-    for genome in genomes:
-        files_info = local_collect_file_info(genome)
 
+def LOCAL_download_file(index, params):
+    file_name = params[1]
+    path = params[0]
+    print(path, file_name)
+    copyfile(path+"/"+file_name, "data/"+index+"/"+file_name)
+
+
+def local_collect_file_info(path):
+    file_list = glob.glob(os.path.join(path, "*.bed"))
+    print(file_list)
+    files_info = {}
+    for file_name in file_list:
+        file_name = file_name.split("/")[-1]
+        interval_count = os.system("wc -l {}/{}".format(path, file_name))
+        files_info[file_name] = {"file_size": interval_count,
+                                 "download_function": LOCAL_download_file,
+                                 "download_params": [path, file_name]}
+    return files_info
+
+def setup_local_indices(genomes):
+    for genome, path in genomes.items():
+        print(genome, path)
+        files_info = local_collect_file_info(path)
+        clustered_files_info = cluster_data("local", genome, files_info)
+        for index, index_info in clustered_files_info.items():
+            setup_index("local", genome, index, index_info)
 
 def setup_indices():
     """ Sets up all sources and genomes listed in CONFIG
@@ -289,8 +314,7 @@ def setup_indices():
     setup_local_indices(config.LOCAL_GENOMES)
 
 if __name__ == "__main__":
-    os.system('python models.py') # set up indexing and files database
+    os.system('python models.py')  # set up indexing and files database
     global conn
     conn = sqlite3.connect('Indexing.db')
     setup_indices()
-
