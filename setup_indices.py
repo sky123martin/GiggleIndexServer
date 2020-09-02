@@ -235,6 +235,8 @@ def setup_index(source, genome, index, index_info):
         # create index directory
         try:
             os.mkdir("data/" + index)
+        except: 
+            print("folder not made")
 
         # add index info to the Index database
         conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
@@ -245,7 +247,7 @@ def setup_index(source, genome, index, index_info):
             bar()
             file_info["download_function"](index, file_info["download_params"])
             conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
-                VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(), 
+                VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(),
                 source, genome, file_info["file_size"], index))
         # FIXME index downloaded files here
         
@@ -277,7 +279,6 @@ def setup_UCSC_indices(genomes):
 def LOCAL_download_file(index, params):
     file_name = params[1]
     path = params[0]
-    print(path, file_name)
     copyfile(path+"/"+file_name, "data/"+index+"/"+file_name)
 
 
