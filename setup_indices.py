@@ -11,6 +11,7 @@ from alive_progress import alive_bar
 from datetime import date
 import sqlite3
 from shutil import copyfile
+import subprocess
 
 config = config
 
@@ -250,8 +251,16 @@ def setup_index(source, genome, index, index_info):
                 VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(),
                 source, genome, file_info["file_size"], index))
         # FIXME index downloaded files here
+
+        f = open('giggle_log.txt','w')
+        cmd_str = 'giggle index -s -f -i \"data/' + index + '/*bed*\" -o data/' + index + '.d'
+        proc = subprocess.check_call(cmd_str,
+                                     stdout=f,
+                                     shell=True)
+        f.close()
         
         filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
+        filelist += glob.glob(os.path.join("data/"+index, "*.bed.gz"))
 
         bar.text("Creating {}: indexing files".format(index))
         bar()
@@ -284,6 +293,7 @@ def LOCAL_download_file(index, params):
 
 def local_collect_file_info(path):
     file_list = glob.glob(os.path.join(path, "*.bed"))
+    file_list += glob.glob(os.path.join(path, "*.bed.gz"))
     files_info = {}
     for file_name in file_list:
         file_name = file_name.split("/")[-1]
