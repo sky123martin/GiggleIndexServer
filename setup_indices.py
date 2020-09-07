@@ -231,14 +231,36 @@ def UCSC_collect_file_info(genome):
     return files_info
 
 
-def setup_index(source, genome, index, index_info):
-    with alive_bar(len(index_info["files"])+3, bar = 'blocks', spinner = 'classic') as bar:
-        # create index directory
-        try:
-            os.mkdir("data/" + index)
-        except: 
-            print("folder not made")
+def giggle_index(path, dest):
+    """ Gzips and indexes a given directory and destination for index
+    Parameters
+    ----------
+    path: path to a directory of bed files
+        ex. data/UCSC_hg19_1/
+    dest:
+        ex. index/UCSC_hg19_1.d
+    Returns
+    -------
+    nothing
+    """
+    f = open('giggle_log.txt','w')
+    
+    cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed\" '+ path +' 4'
+    proc = subprocess.check_call(cmd_str,
+                                    stdout=f,
+                                    shell=True)
 
+    cmd_str = 'giggle index -s -f -i \"' + path + '/*.bed.gz\" -o ' + dest + '.d'
+    proc = subprocess.check_call(cmd_str,
+                                    stdout=f,
+                                    shell=True)
+    f.close()
+
+
+def setup_indices(source, genome, index, index_info):
+    with alive_bar(len(index_info["files"])+1, bar = 'blocks', spinner = 'classic') as bar:
+        # create index directory
+        proc = subprocess.check_call("mkdir -p data/"+index, shell=True)
         # add index info to the Index database
         conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
             index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
@@ -250,39 +272,34 @@ def setup_index(source, genome, index, index_info):
             conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
                 VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(),
                 source, genome, file_info["file_size"], index))
-        # FIXME index downloaded files here
-
-        f = open('giggle_log.txt','w')
-        cmd_str = 'giggle index -s -f -i \"data/' + index + '/*bed*\" -o data/' + index + '.d'
-        proc = subprocess.check_call(cmd_str,
-                                     stdout=f,
-                                     shell=True)
-        f.close()
-        
-        filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
-        filelist += glob.glob(os.path.join("data/"+index, "*.bed.gz"))
 
         bar.text("Creating {}: indexing files".format(index))
+        giggle_index("data/"+index, "indices/"+index)
         bar()
+
+        filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
         if index_info["full"]:  # delete files if index is full
-            bar.text("Completed {}: deleting files".format(index))
-            bar()
-            filelist = glob.glob(os.path.join("data/"+index, "*"))
-            for f in filelist:
-                os.remove(f)
+            filelist = glob.glob(os.path.join("data/"+index, "*.bed.gz"))
+
+        bar.text("Completed {}: deleting files".format(index))
+
+        filelist = glob.glob(os.path.join("data/"+index, "*"))
+        for f in filelist:
+            os.remove(f)
+        if index_info["full"]:  # delete files if index is full
             os.rmdir("data/"+index)
         bar.text("Index {} Completed".format(index))
         print("Index {} Completed".format(index))
 
 
-                 
+
 def setup_UCSC_indices(genomes):
     for genome in genomes:
         files_info = UCSC_collect_file_info(genome)
         clustered_files_info = cluster_data("UCSC", genome, files_info)
         # Iterate through each index
         for index, index_info in clustered_files_info.items():
-            setup_index("UCSC", genome, index, index_info)
+            setup_indices("UCSC", genome, index, index_info)
 
 
 def LOCAL_download_file(index, params):
@@ -308,18 +325,19 @@ def setup_local_indices(genomes):
         files_info = local_collect_file_info(path)
         clustered_files_info = cluster_data("local", genome, files_info)
         for index, index_info in clustered_files_info.items():
-            setup_index("local", genome, index, index_info)
+            setup_indices("local", genome, index, index_info)
 
-def setup_indices():
-    """ Sets up all sources and genomes listed in CONFIG
-    """
-    setup_UCSC_indices(config.UCSC_GENOMES)
-    setup_local_indices(config.LOCAL_GENOMES)
 
 if __name__ == "__main__":
     os.system('python models.py')  # set up indexing and files database
     global conn
     conn = sqlite3.connect('Indexing.db')
-    setup_indices()
+
+    proc = subprocess.check_call("mkdir -p data", shell=True)
+    proc = subprocess.check_call("mkdir -p indices", shell=True)
+
+    setup_UCSC_indices(config.UCSC_GENOMES)
+    setup_local_indices(config.LOCAL_GENOMES)
+
     conn.commit()
     conn.close()

@@ -16,10 +16,12 @@ build/
 get-pip.py
 python-giggle/
 UCSC_utilities/
-data/
-local/
+data/*
+local/*
+indices/*
 giggle/
 ./.ipynb_checkpoints/
 ./UCSC Genome Data API Retrieval.ipynb
 indexing.db
+giggle_log.txt
 Indexing.db-journal

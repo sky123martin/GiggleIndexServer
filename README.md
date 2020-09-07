@@ -1,6 +1,7 @@
 conda create --name env
 git clone https://github.com/sky123martin/GiggleIndexServer
 cd GiggleIndexServer
+git clone https://github.com/ryanlayer/giggle.git
 mkdir UCSC_utilities
 cd UCSC_utilities
 rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/macOSX.x86_64/bigWigToBedGraph ./
@@ -11,8 +12,11 @@ cd ..
 conda install anaconda
 conda create -n env python=3
 conda activate env
-pip install -r requirements.txt
+conda 
+pip3 install -r requirements.txt
 nose2 --verbose
-python setup_indices.py
+python3 setup_indices.py
 source deactivate
 
+
+set up bgzip https://vcf.iobio.io/help.html

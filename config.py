@@ -2,7 +2,7 @@ class config:
     TESTING = True
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 100_000_000_000
+    MAX_INTERVALS_PER_INDEX = 100000000
 
     DB = 'Indexing.db'
     # UCSC Genomes to download
@@ -13,3 +13,4 @@ class config:
 
     # Local genomes to download {genome name: path to data, "rn6" : "local/"}
     LOCAL_GENOMES = {"localgenome": "local"}
+
