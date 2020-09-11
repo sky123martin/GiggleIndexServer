@@ -88,7 +88,7 @@ def target_columns(columns, file_type):
     return {"chrom": chrom, "start": chrom_start, "end": chrom_end, "base shift": base_shift}
 
 
-def cluster_data(source, genome, files_info):
+def cluster_data(source, genome, files_info, indexnum = 1):
     """ Clusters files to be put into a database
     Parameters
     ----------
@@ -105,13 +105,13 @@ def cluster_data(source, genome, files_info):
         bar.text("Clustering genome {}".format(genome))
         clusters = {}
         max_size = config.MAX_INTERVALS_PER_INDEX
-        num_indices = 1
+        num_indices = indexnum
         curr_index = source + "_" + genome + "." + str(num_indices)
         clusters[curr_index] = {"files": {}}
         curr_size = 0
         while len(files_info) != 0:
             for file_name in files_info:
-                if curr_size > max_size and len(files_info) != 0:
+                if curr_size > max_size and len(files_info) > 0:
                     # reset size and name
                     clusters[curr_index]["full"] = True
                     clusters[curr_index]["index_size"] = curr_size
@@ -178,7 +178,6 @@ def UCSC_download_bigDataUrl_file(index, params):
     bigDataURL = params[2]
     track = params[0]
     # UCSC_utilities/bigBedToBed input_file output_file
-    # os.system("" [track, genome, info["bigDataUrl"], info["type"]]
     if "bigBed" in file_type:
         os.system("UCSC_utilities/bigBedToBed http://hgdownload.soe.ucsc.edu/{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
     elif "bigWig" in file_type:
@@ -257,7 +256,7 @@ def giggle_index(path, dest):
     f.close()
 
 
-def setup_indices(source, genome, index, index_info):
+def setup_indices(source, genome, index, index_info, conn):
     with alive_bar(len(index_info["files"])+1, bar = 'blocks', spinner = 'classic') as bar:
         # create index directory
         proc = subprocess.check_call("mkdir -p data/"+index, shell=True)
@@ -277,29 +276,24 @@ def setup_indices(source, genome, index, index_info):
         giggle_index("data/"+index, "indices/"+index)
         bar()
 
-        filelist = glob.glob(os.path.join("data/"+index, "*.bed"))
-        if index_info["full"]:  # delete files if index is full
-            filelist = glob.glob(os.path.join("data/"+index, "*.bed.gz"))
-
         bar.text("Completed {}: deleting files".format(index))
 
         filelist = glob.glob(os.path.join("data/"+index, "*"))
         for f in filelist:
             os.remove(f)
-        if index_info["full"]:  # delete files if index is full
-            os.rmdir("data/"+index)
+        os.rmdir("data/"+index)
         bar.text("Index {} Completed".format(index))
         print("Index {} Completed".format(index))
 
 
 
-def setup_UCSC_indices(genomes):
+def setup_UCSC_indices(genomes, conn):
     for genome in genomes:
         files_info = UCSC_collect_file_info(genome)
         clustered_files_info = cluster_data("UCSC", genome, files_info)
         # Iterate through each index
         for index, index_info in clustered_files_info.items():
-            setup_indices("UCSC", genome, index, index_info)
+            setup_indices("UCSC", genome, index, index_info, conn)
 
 
 def LOCAL_download_file(index, params):
@@ -314,30 +308,31 @@ def local_collect_file_info(path):
     files_info = {}
     for file_name in file_list:
         file_name = file_name.split("/")[-1]
-        interval_count = os.system("wc -l {}/{}".format(path, file_name))
-        files_info[file_name] = {"file_size": interval_count,
+        interval_count = subprocess.check_output("wc -l {}/{}".format(path, file_name), shell=True, text=True)
+        files_info[file_name] = {"file_size": int(interval_count.split()[0]),
                                  "download_function": LOCAL_download_file,
                                  "download_params": [path, file_name]}
     return files_info
 
-def setup_local_indices(genomes):
+def setup_local_indices(genomes, conn):
     for genome, path in genomes.items():
         files_info = local_collect_file_info(path)
         clustered_files_info = cluster_data("local", genome, files_info)
         for index, index_info in clustered_files_info.items():
-            setup_indices("local", genome, index, index_info)
+            setup_indices("local", genome, index, index_info, conn)
 
 
 if __name__ == "__main__":
     os.system('python models.py')  # set up indexing and files database
-    global conn
+    # global conn
     conn = sqlite3.connect('Indexing.db')
 
     proc = subprocess.check_call("mkdir -p data", shell=True)
     proc = subprocess.check_call("mkdir -p indices", shell=True)
 
-    setup_UCSC_indices(config.UCSC_GENOMES)
-    setup_local_indices(config.LOCAL_GENOMES)
+    setup_UCSC_indices(config.UCSC_GENOMES, conn)
+    setup_local_indices(config.LOCAL_GENOMES, conn)
 
+    os.rmdir("data/")
     conn.commit()
     conn.close()
