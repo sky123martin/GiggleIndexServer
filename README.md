@@ -28,7 +28,7 @@ conda create -n env python=3
 
 conda activate env
 
-pip3 install -r requirements.txt
+conda install --file requirements.txt
 
 nose2 --verbose
 
