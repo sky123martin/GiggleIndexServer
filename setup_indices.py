@@ -242,6 +242,7 @@ def giggle_index(path, dest):
     -------
     nothing
     """
+
     f = open('giggle_log.txt','w')
     
     cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed\" '+ path +' 4'
@@ -261,19 +262,25 @@ def setup_indices(source, genome, index, index_info, conn):
         # create index directory
         proc = subprocess.check_call("mkdir -p data/"+index, shell=True)
         # add index info to the Index database
-        conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
-            index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
         # iterate through all files belonging to the index and download them
         for filename, file_info in index_info["files"].items():
             bar.text("Creating {}: Downloading {}".format(index, filename))
             bar()
             file_info["download_function"](index, file_info["download_params"])
-            conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
-                VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(),
-                source, genome, file_info["file_size"], index))
+            if len(glob.glob(os.path.join("data/"+index + "/" + filename, "*"))) > 0:
+                print("FILE DOWNLOADED")
+                conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME) \
+                    VALUES ('{}', {}, '{}', '{}', {}, '{}')".format(filename, date.today(),
+                    source, genome, file_info["file_size"], index))
+            
 
         bar.text("Creating {}: indexing files".format(index))
-        giggle_index("data/"+index, "indices/"+index)
+        if len(glob.glob(os.path.join("data/"+index, "*"))) > 0:
+            conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES ('{}', {}, {}, '{}', '{}', {}, {})".format(index,
+                index.split(".")[1], date.today(), source, genome, index_info["full"], index_info["index_size"]))
+            # BUG not all files are able to be downloaded
+            giggle_index("data/"+index, "indices/"+index)
+
         bar()
 
         bar.text("Completed {}: deleting files".format(index))

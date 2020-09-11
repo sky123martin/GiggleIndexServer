@@ -6,7 +6,7 @@ class config:
 
     DB = 'Indexing.db'
     # UCSC Genomes to download
-    UCSC_GENOMES = []
+    UCSC_GENOMES = ["rn6"]
     UCSC_SQL_DB_HOST = "genome-mysql.soe.ucsc.edu"
     UCSC_SQL_DB_USER = "genome"
     UCSC_API = "https://api.genome.ucsc.edu/"
