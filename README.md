@@ -71,7 +71,6 @@ nose2 --verbose
 ```
 
 # Index Files
-![alt text](setup_documentation.png "Title")
 
 ```
 python3 setup_indices.py
