@@ -85,7 +85,7 @@ def query_interval_index(interval, index):
         return search_output
 
 def QUERY_INTERVAL(interval, source="", genome=""):
-    """Query a given interval in format 'Chr:#-#' ex. 1:200457776-200457776"""
+    """Query a given interval in format 'Chr:#-#' ie. <optional param: source> <optional param: genome>"""
     validate_interval(interval)
 
     if source != "":  # Check if valid source
@@ -138,7 +138,7 @@ def query_file_index(path, index):
     return search_output
 
 def QUERY_FILE(path, source="", genome=""):
-    """Query a given file given a path"""
+    """Query a given file given a path. ie: <path> <optional param: source> <optional param: genome>"""
     
     validate_query_file(path)
 

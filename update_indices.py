@@ -41,7 +41,6 @@ def update_UCSC(genome):
         conn.execute("DELETE FROM FILES WHERE INDEXNAME = '{}'".format(open_index))
         conn.execute("DELETE FROM INDICES WHERE NAME = '{}'".format(open_index))
 
-    print("HEKDJDJ", num_new_files)
 
     if num_new_files > 0:
         # Re cluster and index files
@@ -86,7 +85,6 @@ def update_LOCAL(genome):
         conn.execute("DELETE FROM FILES WHERE INDEXNAME = '{}'".format(open_index))
         conn.execute("DELETE FROM INDICES WHERE NAME = '{}'".format(open_index))
 
-    print("HEKDJDJ", num_new_files)
 
     if num_new_files > 0:
         # Re cluster and index files
@@ -96,11 +94,9 @@ def update_LOCAL(genome):
 
 
 def update(source, genome):
-    print("HELLO")
     if source == "UCSC":
         update_UCSC(genome)
     elif source == "local":
-        print("HELLO")
         update_LOCAL(genome)
 
 
@@ -112,7 +108,6 @@ if __name__ == "__main__":
         source = row[0]
         genome = row[1]
         update(source, genome)
-        print("Fff")
 
         conn.commit()
     conn.close()
