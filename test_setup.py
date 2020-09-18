@@ -1,4 +1,4 @@
-from setup_indices import cluster_data, connect_SQL_db, target_columns
+from setup_indices import cluster_data, connect_SQL_db, extract_bed_columns
 from config import config
 from contextlib import contextmanager
 import pandas as pd
@@ -125,7 +125,7 @@ class BasicTests(unittest.TestCase):
         file_type = "genePred genscanPep"
         columns = ['bin', 'name', 'chrom', 'strand', 'txStart', 'txEnd', 'cdsStart', 'cdsEnd', 'exonCount', 'exonStarts', 'exonEnds']
         expected_result = {"chrom": "chrom", "start": 'txStart', "end": 'txEnd', "base shift": 0}
-        result =  target_columns(columns, file_type)
+        result = target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
         file_type = "rmsk"
@@ -146,7 +146,7 @@ class BasicTests(unittest.TestCase):
         result = target_columns(columns, file_type)
         self.assertEqual(result, expected_result)
 
-    def test_UCSC_target_columns(self):
+    def test_UCSC_extract_bed_columns(self):
         # Integration test of both target_columns and UCSC servers
         # Iterate through a genome in UCSC and make sure target_columns runs
         with connect_SQL_db(config.UCSC_SQL_DB_HOST, config.UCSC_SQL_DB_USER) as db:
@@ -161,8 +161,8 @@ class BasicTests(unittest.TestCase):
                     # bigDataUrl then the file needs to be downloaded/parsed
                     if "bigDataUrl" not in track_info:
                         columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
-                        if len(columns) > 2: # Some files just don't have any info on them
-                            result = target_columns(columns, track_info["type"])
+                        if len(columns) > 2:  # Some files just don't have any info on them
+                            result = extract_bed_columns(columns, track_info["type"])
                             self.assertTrue([result])
 
     ####################
@@ -202,7 +202,7 @@ class BasicTests(unittest.TestCase):
         genome = "fruits"
         source = "kitchen"
         clusters = cluster_data(source, genome, files_info)
-        expected_clusters = {source + "_" + genome+".1": {
+        expected_clusters = {source + "_" + genome+"_1": {
                                 "full": True,
                                 "files": {
                                     "bannana": {
@@ -216,7 +216,7 @@ class BasicTests(unittest.TestCase):
                                         "download_params": [2,2,2]
                                     }},
                                 "index_size": testing_size + 1.1*testing_size},
-                             source + "_" + genome+".2": {
+                             source + "_" + genome+"_2": {
                                  "full": False,
                                  "files": {
                                     "apple": {
