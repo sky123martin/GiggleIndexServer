@@ -25,10 +25,10 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 10000000
+    MAX_INTERVALS_PER_INDEX = 10000
 
     # Number of proccesses available to server
-    AVAILABLE_PROCCESSES = 1
+    AVAILABLE_PROCCESSES = 4
 
     # Genome from UCSC to download and index
     UCSC_GENOMES = []

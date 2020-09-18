@@ -5,6 +5,10 @@ from config import config
 import sqlite3
 from sys import argv
 from clize import run
+from multiprocessing.pool import Pool
+import multiprocessing 
+from functools import partial
+
 
 config = config
 conn = sqlite3.connect(config.DB)
@@ -74,32 +78,41 @@ def validate_interval(interval):
         print("ERROR: Interval not in correct format Chr:#-# ex 1:200457776-200457776")
         raise
 
+def query_interval_index(interval, index):
+        index_path = "indices/" + index + ".d"
+        cmd_str = 'giggle search -i ' + index_path + ' -r ' + interval
+        search_output = subprocess.check_output(cmd_str, shell=True)
+        return search_output
+
 def QUERY_INTERVAL(interval, source="", genome=""):
     """Query a given interval in format 'Chr:#-#' ex. 1:200457776-200457776"""
     validate_interval(interval)
 
-    if source != "":
+    if source != "":  # Check if valid source
         validate_source(source)
 
-    if genome != "":
+    if genome != "":  # Check if valid genome
         validate_genome(genome)
 
-    if source != "" and genome != "":
+    if source != "" and genome != "":  # Based on given params query all indices to search
         out = conn.execute("SELECT NAME from INDICES WHERE SOURCE = '{}' AND GENOME = '{}'".format(source, genome))
     elif source != "":
         out = conn.execute("SELECT NAME from INDICES WHERE SOURCE = '{}'".format(source))
     else:
         out = conn.execute("SELECT NAME from INDICES")
 
-    for index in out:
-        # TODO Multithread and concat results
-        print("RESULTS FOR",index[0])
-        index_path = "indices/" + index[0] + ".d"
-        cmd_str = 'giggle search -i ' + index_path + ' -r ' + interval
-        output = subprocess.check_output(cmd_str, shell=True)
-        print(output)
+    indices = list([i[0] for i in out])  # reformat sql results into list
+
+    # Multiproccesing used to query indices
+    with Pool(config.AVAILABLE_PROCCESSES) as p:  # to check multiprocessing.cpu_count()
+        output = p.map(partial(query_interval_index, interval), indices)
     
-    print("QUERY_INTERVAL", interval, genome)
+    # Format output
+    for result in output:
+        temp = str(result).split('#')[2:]
+        for x in temp:
+            print(x[:-2].replace('\\',"  "))
+
 
 def validate_query_file(path_):
     # validate if path exists
@@ -118,6 +131,11 @@ def validate_query_file(path_):
          print("ERROR: File given, {} , is not in format bed.gz or vcf.gz".format(path_.split("/")[-1]))
          raise
 
+def query_file_index(path, index):
+    index_path = "indices/" + index + ".d"
+    cmd_str = 'giggle search -i ' + index_path + ' -q ' + path  # + ' -s'
+    search_output = subprocess.check_output(cmd_str, shell=True)
+    return search_output
 
 def QUERY_FILE(path, source="", genome=""):
     """Query a given file given a path"""
@@ -137,14 +155,15 @@ def QUERY_FILE(path, source="", genome=""):
     else:
         out = conn.execute("SELECT NAME from INDICES")
 
-    for index in out:
-        # TODO Multithread and concat results
-        print("RESULTS FOR",index[0])
-        index_path = "indices/" + index[0] + ".d"
-        cmd_str = 'giggle search -i ' + index_path + ' -q ' + path + ' -s'
-        output = subprocess.check_output(cmd_str, shell=True)
-        print(output)
+    indices = list([i[0] for i in out])
 
+    with Pool(config.AVAILABLE_PROCCESSES) as p: # to check multiprocessing.cpu_count()
+        output = p.map(partial(query_file_index, path), indices)
+
+    for result in output:
+        temp = str(result).split('#')[2:]
+        for x in temp:
+            print(x[:-2].replace('\\',"  "))
 
 if __name__ == "__main__":
     run(FILES, alt={
