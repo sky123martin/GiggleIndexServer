@@ -70,7 +70,7 @@ Errors in config test functions mean that you may have entered invalid config va
 nose2 --verbose
 ```
 
-## Setup: Index
+# Index FIles
 ```
 python3 setup_indices.py
 ```
