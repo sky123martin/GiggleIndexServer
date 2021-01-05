@@ -1,5 +1,6 @@
 from config import config
-from setup_indices import local_collect_file_info, UCSC_collect_file_info, cluster_data, setup_indices
+import pandas as pd
+from setup_indices import local_collect_file_info, UCSC_collect_file_info, cluster_data, setup_indices, local_metadata
 import sqlite3
 import glob
 import os
@@ -45,13 +46,26 @@ def update_UCSC(genome):
     if num_new_files > 0:
         # Re cluster and index files
         clustered_files_info = cluster_data("local", genome, files_info, open_index.split(".")[-1])
+        # collect metadata for files
+        metadata = UCSC_metadata(genome)
+
         for index, index_info in clustered_files_info.items():
-                setup_indices("local", genome, index, index_info, conn)
+            # extract files for the index
+            files = list(index_info["files"].keys())
+            # grab metadata pertaining to those files
+            relevant_metadata = metadata[metadata['file_name'].isin(files)]
+            index_metadata = pd.merge(relevant_metadata, 
+                                    pd.DataFrame([[i] for i in files], columns=['file_name']),
+                                    on ="file_name",
+                                    how ="right")
+            index_metadata.fillna("")
+            # setup this index
+            setup_indices("UCSC", genome, index, index_info, index_metadata, conn)
 
 
 
 def update_LOCAL(genome):
-    files_info = local_collect_file_info(config.LOCAL_GENOMES[genome])
+    files_info = local_collect_file_info(config.LOCAL_GENOMES[genome][0])
     files_out = conn.execute("SELECT NAME, INDEXNAME from FILES WHERE SOURCE = 'local' AND GENOME = '{}'".format(genome))
     re_indexed_files = {}
     
@@ -88,9 +102,20 @@ def update_LOCAL(genome):
 
     if num_new_files > 0:
         # Re cluster and index files
+        # collect metadata for files
+        metadata = local_metadata(config.LOCAL_GENOMES[genome][1])
+        # cluster files based on hyperparam in .config
         clustered_files_info = cluster_data("local", genome, files_info, open_index.split(".")[-1])
+        # iterate through each cluster then download and index cluster files
+
         for index, index_info in clustered_files_info.items():
-                setup_indices("local", genome, index, index_info, conn)
+            files = list(index_info["files"].keys())
+            index_metadata = pd.merge(metadata, 
+                                    pd.DataFrame([[i] for i in files], columns = ['file_name']),
+                                    on = "file_name",
+                                    how = "right")
+            index_metadata.fillna("")
+            setup_indices("local", genome, index, index_info, index_metadata, conn)
 
 
 def update(source, genome):

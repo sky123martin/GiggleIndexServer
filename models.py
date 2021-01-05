@@ -13,18 +13,20 @@ conn.execute('''CREATE TABLE INDICES
           GENOME    EXT     NOT NULL,
           FULL      NUMERIC NOT NULL,
           SIZE      INT     NOT NULL);''')
+
 conn.execute('''DROP TABLE IF EXISTS FILES;''')
-
-
 conn.execute('''CREATE TABLE FILES
          (NAME      TEXT     NOT NULL,
           DATE      NUMERIC  NOT NULL,
           SOURCE    TEXT     NOT NULL,
           GENOME    TEXT     NOT NULL,
           SIZE      INT      NOT NULL,
-          INDEXNAME TEXT     NOT NULL);''')
+          INDEXNAME TEXT     NOT NULL,
+          SHORTNAME TEXT     ,
+          LONGNAME  TEXT     ,
+          SHORTINFO NVARCHAR     ,
+          LONGINFO  NVARCHAR     );''')
 
 print("Database created. Tables initialized FILES and INDICES")
 conn.commit()
 conn.close()
-

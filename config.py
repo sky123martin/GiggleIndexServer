@@ -15,7 +15,7 @@ class config:
     LOCAL_ACCEPTABLE_FILE_FORMATS = ["bed", "bed.gz"]
 
     # UCSC Genomes to download
-    UCSC_BIG_DATA_LINK = ""
+    UCSC_BIG_DATA_LINK = "http://hgdownload.soe.ucsc.edu"
     UCSC_SQL_DB_HOST = "genome-mysql.soe.ucsc.edu"
     UCSC_SQL_DB_USER = "genome"
     UCSC_API = "https://api.genome.ucsc.edu/"
@@ -25,15 +25,20 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 10000
+    MAX_INTERVALS_PER_INDEX = 100000000
 
     # Number of proccesses available to server
     AVAILABLE_PROCCESSES = 4
 
     # Genome from UCSC to download and index
-    UCSC_GENOMES = []
+    UCSC_GENOMES = []#["rn6"]
 
     # Local genomes to download and index 
-    # Format: {<genome name>: <path to data>,...
-    # Example  {"lab data" : "local/"}
-    LOCAL_GENOMES = {"localgenome": "local"}
+    # Format: {<genome name>: [<path to data>, <path metadata file name>],...
+    # Example  {"lab data" : ["local/", "local/metadata.csv"]}
+    LOCAL_GENOMES = {"localgenome": ["local/", ""]}
+
+    # Metadata file
+    # Format: .csv format with columns = ["file_name", "short_name", "long_name", "short_info", "long_info"]
+    # Example  "metadata.csv"
+

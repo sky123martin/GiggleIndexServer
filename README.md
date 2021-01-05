@@ -41,6 +41,10 @@ conda activate env
 Install necessary python libararies
 ```
 conda install --file requirements.txt
+
+or
+
+pip3 install -r requirements.txt 
 ```
 ## Setup: Configuration Variables
 The file config.py is where you input the genomes you want to index and clustering params.
