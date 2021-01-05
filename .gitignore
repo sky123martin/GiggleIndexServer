@@ -19,6 +19,7 @@ UCSC_utilities/
 data/*
 local/*
 indices/*
+output.txt
 giggle/
 ./.ipynb_checkpoints/
 ./UCSC Genome Data API Retrieval.ipynb

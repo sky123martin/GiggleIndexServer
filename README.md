@@ -102,50 +102,42 @@ python3 update_indices.py -- help
 ## Database querying functions
 Check what indicies are in server:
 ```
-python3 update_indices.py -i
+python3 query_indices.py -i
 ```
 Check what files are in server:
 ```
-python3 update_indices.py -f
+python3 query_indices.py -f
 ```
 Check what genomes are in server:
 ```
-python3 update_indices.py -g
+python3 query_indices.py -g
 ```
 Check what sources are in server:
 ```
-python3 update_indices.py -s
+python3 query_indices.py -s
 ```
 ## Index querying functions
 ### Interval
-Query an interval on all sources and genomes
-```
-python3 update_indices.py --qi 1:10000-20000
-```
 
 Query an interval on a specfic source
 ```
-python3 update_indices.py --qi 1:10000-20000 UCSC
+python3 query_indices.py --qi 1:10000-20000 rn6
 ```
 
 Query an interval on a specfic source and genome
 ```
-python3 update_indices.py --qi 1:10000-20000 UCSC rn6
+python3 query_indices.py --qi 1:10000-20000 rn6 UCSC
 ```
 ### File
-Query a file
-```
-python3 update_indices.py --qf local/testbed.bed.gz
-```
 
 Query a file on a specfic source
 ```
-python3 update_indices.py --qf local/testbed.bed.gz UCSC
+python3 query_indices.py --qf local/testbed.bed.gz rn6
 ```
 
 Query a file on a specfic source and genome
 ```
-python3 update_indices.py --qf local/testbed.bed.gz UCSC rn6
+python3 query_indices.py --qf local/testbed.bed.gz rn6 UCSC
 ```
 
 

@@ -155,12 +155,17 @@ def giggle_index(path, dest):
                                     shell=True)
 
 
-    cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed*\" '+temp_path +' 4'
+    cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed*\" ' + temp_path + ' 4'
     proc = subprocess.check_call(cmd_str,
                                     stdout=f,
                                     shell=True)
 
-    cmd_str = 'giggle index -s -f -i \"' + temp_path + '/*.bed.gz\" -o ' + dest + '.d'
+    cmd_str = 'mv ' + temp_path + ' ' + path
+    proc = subprocess.check_call(cmd_str,
+                                    stdout=f,
+                                    shell=True)
+
+    cmd_str = 'giggle index -s -f -i \"' + path + '/*.bed.gz\" -o ' + dest + '.d'
     proc = subprocess.check_call(cmd_str,
                                     stdout=f,
                                     shell=True)
@@ -383,17 +388,14 @@ def UCSC_metadata_extract_description(html):
 # LOCAL GENOME FUNCTIONS #
 ##########################
 
-def setup_LOCAL(genomes, conn):
-    for genome, paths in genomes.items():
-        # unpack paths
-        data_path = paths[0]
-        metadata_path = paths[1]
+def setup_LOCAL(projects, conn):
+    for project in projects: #genome, paths in genomes.items():
         # collect file information
-        files_info = local_collect_file_info(data_path)
+        files_info = local_collect_file_info(project["data_path"])
         # collect metadata for files
-        metadata = local_metadata(metadata_path)
+        metadata = local_metadata(project["metadata_path"])
         # cluster files based on hyperparam in .config
-        clustered_files_info = cluster_data("local", genome, files_info)
+        clustered_files_info = cluster_data(project["project_name"], project["reference_genome"], files_info)
         # iterate through each cluster then download and index cluster files
 
         for index, index_info in clustered_files_info.items():
@@ -403,7 +405,7 @@ def setup_LOCAL(genomes, conn):
                                     on = "file_name",
                                     how = "right")
             index_metadata.fillna("")
-            setup_indices("local", genome, index, index_info, index_metadata, conn)
+            setup_indices(project["project_name"], project["reference_genome"], index, index_info, index_metadata, conn)
 
 
 def local_collect_file_info(path):

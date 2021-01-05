@@ -22,10 +22,10 @@ conn.execute('''CREATE TABLE FILES
           GENOME    TEXT     NOT NULL,
           SIZE      INT      NOT NULL,
           INDEXNAME TEXT     NOT NULL,
-          SHORTNAME TEXT     ,
-          LONGNAME  TEXT     ,
-          SHORTINFO NVARCHAR     ,
-          LONGINFO  NVARCHAR     );''')
+          SHORTNAME TEXT,
+          LONGNAME  TEXT,
+          SHORTINFO NVARCHAR,
+          LONGINFO  NVARCHAR);''')
 
 print("Database created. Tables initialized FILES and INDICES")
 conn.commit()

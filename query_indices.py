@@ -84,8 +84,8 @@ def query_interval_index(interval, index):
         search_output = subprocess.check_output(cmd_str, shell=True)
         return search_output
 
-def QUERY_INTERVAL(interval, source="", genome=""):
-    """Query a given interval in format 'Chr:#-#' ie. <optional param: source> <optional param: genome>"""
+def QUERY_INTERVAL(interval, genome, source=""):
+    """Query a given interval in format 'Chr:#-#' <genome> <optional param: source>"""
     validate_interval(interval)
 
     if source != "":  # Check if valid source
@@ -106,12 +106,15 @@ def QUERY_INTERVAL(interval, source="", genome=""):
     # Multiproccesing used to query indices
     with Pool(config.AVAILABLE_PROCCESSES) as p:  # to check multiprocessing.cpu_count()
         output = p.map(partial(query_interval_index, interval), indices)
-    
+
+    f = open("output.txt", "a")
+
     # Format output
     for result in output:
         temp = str(result).split('#')[2:]
         for x in temp:
-            print(x[:-2].replace('\\',"  "))
+            clean_string = x[:-2].replace('\\t', ", ").replace('data/', "").replace("\\", "")
+            print(clean_string, file=f)
 
 
 def validate_query_file(path_):
@@ -137,8 +140,8 @@ def query_file_index(path, index):
     search_output = subprocess.check_output(cmd_str, shell=True)
     return search_output
 
-def QUERY_FILE(path, source="", genome=""):
-    """Query a given file given a path. ie: <path> <optional param: source> <optional param: genome>"""
+def QUERY_FILE(path, genome, source=""):
+    """Query a given file given a path. ie: <path> <genome> <optional param: source>"""
     
     validate_query_file(path)
 
@@ -160,10 +163,13 @@ def QUERY_FILE(path, source="", genome=""):
     with Pool(config.AVAILABLE_PROCCESSES) as p: # to check multiprocessing.cpu_count()
         output = p.map(partial(query_file_index, path), indices)
 
+    f = open("output.txt", "a")
+    # Format output
     for result in output:
         temp = str(result).split('#')[2:]
         for x in temp:
-            print(x[:-2].replace('\\',"  "))
+            clean_string = x[:-2].replace('\\t', ", ").replace('data/', "").replace("\\", "")
+            print(clean_string, file=f)
 
 if __name__ == "__main__":
     run(FILES, alt={
