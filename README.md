@@ -88,7 +88,7 @@ python3 update_indices.py
 # Search Indices
 
 ```
-python3 update_indices.py -- help
+python3 query_indices.py -- help
 
   -h, --help   Show the help
   -i           "returns all currently hosted indices

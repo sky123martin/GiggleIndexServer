@@ -160,6 +160,7 @@ def giggle_index(path, dest):
                                     stdout=f,
                                     shell=True)
 
+    delete_directory(path)
     cmd_str = 'mv ' + temp_path + ' ' + path
     proc = subprocess.check_call(cmd_str,
                                     stdout=f,
@@ -171,7 +172,6 @@ def giggle_index(path, dest):
                                     shell=True)
 
     delete_directory(temp_path)
-    delete_directory(path)
     f.close()
 
 
@@ -183,7 +183,6 @@ def setup_indices(source, genome, index, index_info, metadata, conn):
         # iterate through all files belonging to the index and download them
         for track_name, file_info in index_info["files"].items():
             file_metadata = metadata[metadata["file_name"] == track_name].iloc[0]
-
             bar.text("Creating {}: Downloading {}".format(index, track_name))
             bar()
             file_info["download_function"](index, file_info["download_params"])
@@ -198,8 +197,9 @@ def setup_indices(source, genome, index, index_info, metadata, conn):
                                         index,
                                         file_metadata["short_name"],
                                         file_metadata["long_name"],
-                                        file_metadata["short_info"],
-                                        file_metadata["long_info"],))
+                                        str(file_metadata["short_info"]),
+                                        str(file_metadata["long_info"]),
+                                        ))
             else:
                 print("file not found:", file_info)
 
@@ -230,6 +230,7 @@ def setup_UCSC_GENOMES(genomes, conn):
         files_info = UCSC_collect_file_info(genome, "")
         # collect metadata for files
         metadata = UCSC_metadata(genome)
+        #metadata.to_csv("metadata.csv")
         # cluster files based on hyperparam in .config
         clustered_files_info = cluster_data("UCSC", genome, files_info)
         # iterate through each cluster then download and index cluster files
@@ -270,8 +271,7 @@ def UCSC_collect_file_info(genome, HUB_EXT):
             bar.text("Collecting file info for {}: {}".format(genome, track))
             bar()
             # Sometimes the track name != table name, restore track as table name
-            if "table" in info:  #FIXME store table name and track name so file can be retrieved
-                track = info["table"]
+            track = info["table"] if "table" in info else track
 
             # If bigData URL is included and not empty then file has been compressed for storage
             if "bigDataUrl" in info.keys() and info["itemCount"] > 0 and info["bigDataUrl"].split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:  # if stored as a big data file
@@ -405,6 +405,7 @@ def setup_LOCAL(projects, conn):
                                     on = "file_name",
                                     how = "right")
             index_metadata.fillna("")
+            
             setup_indices(project["project_name"], project["reference_genome"], index, index_info, index_metadata, conn)
 
 
@@ -439,8 +440,9 @@ def local_metadata(path):
             if col not in columns:
                 metadata_exists = False 
                 print("Metadata file {} does not contain column {}. Please check the LOCAL_METADATA formatting guidelines in Config.py. Indexing will continue without metadata.".format(config.LOCAL_METADATA, col))
-        metadata["file_name"] = metadata["file_name"].apply(clean_file_name())
+        metadata["file_name"] = metadata["file_name"].apply(clean_file_name)
 
+    # if metadata doesn't follow standards then replace metadata with empty dataframe
     if metadata_exists == False:
         metadata = pd.DataFrame(columns = necesary_columns)
 

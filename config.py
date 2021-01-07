@@ -38,10 +38,9 @@ class config:
     # Example  {"lab data" : ["local/", "local/metadata.csv"]}{"localgenome": ["local/", "", "rn6"]}
     LOCAL_GENOMES = [{"project_name": "test",
                       "reference_genome": "rn6",
-                      "metadata_path": "",
+                      "metadata_path": "local/metadata.csv",
                       "data_path": "local/"
-                      }
-                    ]
+                      }]
 
     # Metadata file
     # Format: .csv format with columns = ["file_name", "short_name", "long_name", "short_info", "long_info"]

@@ -24,8 +24,8 @@ conn.execute('''CREATE TABLE FILES
           INDEXNAME TEXT     NOT NULL,
           SHORTNAME TEXT,
           LONGNAME  TEXT,
-          SHORTINFO NVARCHAR,
-          LONGINFO  NVARCHAR);''')
+          SHORTINFO TEXT,
+          LONGINFO  TEXT);''')
 
 print("Database created. Tables initialized FILES and INDICES")
 conn.commit()
