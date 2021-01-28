@@ -20,9 +20,13 @@ data/*
 local/*
 indices/*
 output.txt
+uploads/*
+outputs/*
 giggle/
 ./.ipynb_checkpoints/
 ./UCSC Genome Data API Retrieval.ipynb
 indexing.db
 giggle_log.txt
 Indexing.db-journal
+roadmap_sort/*
+roadmap_sort/

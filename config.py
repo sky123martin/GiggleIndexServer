@@ -25,7 +25,7 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 10000
+    MAX_INTERVALS_PER_INDEX = 1000000
 
     # Number of proccesses available to server
     AVAILABLE_PROCCESSES = 4
@@ -37,9 +37,9 @@ class config:
     # Format: {<genome name>: [<path to data>, <path metadata file name>],...
     # Example  {"lab data" : ["local/", "local/metadata.csv"]}{"localgenome": ["local/", "", "rn6"]}
     LOCAL_GENOMES = [{"project_name": "test",
-                      "reference_genome": "rn6",
-                      "metadata_path": "local/metadata.csv",
-                      "data_path": "local/"
+                      "reference_genome": "hg19",
+                      "metadata_path": "",
+                      "data_path": "roadmap_sort/"
                       }]
 
     # Metadata file
