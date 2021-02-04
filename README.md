@@ -40,10 +40,6 @@ conda activate env
 
 Install necessary python libararies
 ```
-conda install --file requirements.txt
-
-or
-
 pip3 install -r requirements.txt 
 ```
 ## Setup: Configuration Variables

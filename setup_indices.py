@@ -148,37 +148,45 @@ def giggle_index(path, dest):
 
     f = open('giggle_log.txt','w') 
     temp_path = path + "_sorted"
-    cmd_str = "mkdir -p " + temp_path
+    
 
-    proc = subprocess.check_call(cmd_str,
-                                    stdout=f,
-                                    shell=True)
+    try:
+        cmd_str = "mkdir -p " + temp_path
+        proc = subprocess.check_output(cmd_str,
+                                        shell=True,
+                                        timeout=config.timeout_file_processing)
+    # os.mkdir(temp_path)
+        print(cmd_str)
+        cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed*\" ' + temp_path + ' 4'
+        proc = subprocess.check_output(cmd_str,
+                                        shell=True,
+                                        timeout=config.timeout_file_processing)
 
-
-    cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed*\" ' + temp_path + ' 4'
-    proc = subprocess.check_call(cmd_str,
-                                    stdout=f,
-                                    shell=True)
-
-    delete_directory(path)
-    cmd_str = 'mv ' + temp_path + ' ' + path
-    proc = subprocess.check_call(cmd_str,
-                                    stdout=f,
-                                    shell=True)
-
-    cmd_str = 'giggle index -s -f -i \"' + path + '/*.bed.gz\" -o ' + dest + '.d'
-    proc = subprocess.check_call(cmd_str,
-                                    stdout=f,
-                                    shell=True)
+        print(cmd_str)
+        delete_directory(path)
+        cmd_str = 'mv ' + temp_path + ' ' + path
+        proc = subprocess.check_output(cmd_str,
+                                        shell=True,
+                                        timeout=config.timeout_file_processing)
+        print(cmd_str)
+        cmd_str = 'giggle index -s -f -i \"' + path + '/*.bed.gz\" -o ' + dest + '.d'
+        proc = subprocess.check_output(cmd_str,
+                                    shell=True,
+                                    timeout=config.timeout_file_processing)
+    except Exception as e:
+        print(e)
+        delete_directory(temp_path)
+        return
 
     delete_directory(temp_path)
     f.close()
+    return
 
 
 def setup_indices(source, genome, index, index_info, metadata, conn):
     with alive_bar(len(index_info["files"])+1, bar = 'blocks', spinner = 'classic') as bar:
         # create index directory
-        proc = subprocess.check_call("mkdir -p data/"+index, shell=True)
+        proc = subprocess.check_output("mkdir -p data/"+index, shell=True)
         # add index info to the Index database
         # iterate through all files belonging to the index and download them
         for track_name, file_info in index_info["files"].items():
@@ -228,6 +236,8 @@ def setup_UCSC_GENOMES(genomes, conn):
     for genome in genomes:
         # collect file information
         files_info = UCSC_collect_file_info(genome, "")
+        if isinstance(files_info, str):
+                continue
         # collect metadata for files
         metadata = UCSC_metadata(genome)
         #metadata.to_csv("metadata.csv")
@@ -262,43 +272,50 @@ def UCSC_collect_file_info(genome, HUB_EXT):
     # Check API for file information
     request_url = "{}/list/tracks?{}genome={};trackLeavesOnly=1".format(config.UCSC_API, HUB_EXT, genome)
     print("REQUEST URL", request_url)
-    tracks = requests.get(url=request_url).json()[genome]
+    try:
+        tracks = requests.get(url=request_url).json()[genome]
 
-    files_info = {}  # Create empty dict to fill with info
-    with alive_bar(len(tracks), bar='bubbles', spinner='classic') as bar:  # Start progress bar
-        for track, info in tracks.items():
-            # Progress bar
-            bar.text("Collecting file info for {}: {}".format(genome, track))
-            bar()
-            # Sometimes the track name != table name, restore track as table name
-            track = info["table"] if "table" in info else track
+        files_info = {}  # Create empty dict to fill with info
+        with alive_bar(len(tracks), bar='bubbles', spinner='classic') as bar:  # Start progress bar
+            for track, info in tracks.items():
+                # Progress bar
+                bar.text("Collecting file info for {}: {}".format(genome, track))
+                bar()
+                # Sometimes the track name != table name, restore track as tablename
+                track = info["table"] if "table" in info else track
 
-            # If bigData URL is included and not empty then file has been compressed for storage
-            if "bigDataUrl" in info.keys() and info["itemCount"] > 0 and info["bigDataUrl"].split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:  # if stored as a big data file
-                files_info[track] = {"file_size": info["itemCount"],
-                                     "download_function": UCSC_download_bigDataUrl_file,
-                                     "download_params": [track, genome, info["bigDataUrl"], info["type"]]
-                                    }   
+                # If bigData URL is included and not empty then file has been compressed for storage
+                if "bigDataUrl" in info.keys() and info["itemCount"] > 0 and info["bigDataUrl"].split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:  # if stored as a big data file
+                    files_info[track] = {"file_size": info["itemCount"],
+                                        "download_function": UCSC_download_bigDataUrl_file,
+                                        "download_params": [track, genome, info["bigDataUrl"], info["type"], HUB_EXT]
+                                        }   
 
-            # If no bigDataURL than it must be uncompressed in sql db
-            if "bigDataUrl" not in info.keys() and info["itemCount"] > 0:
-                with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
-                    # Retrieve column name from sql db track table
-                    columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
-                    if len(columns) > 4:  # Some files just don't have any info in them
-                        bed_columns = extract_bed_columns(columns, info["type"])
-                        if "" not in bed_columns:  # else 
-                            files_info[track] = {"file_size": info["itemCount"],
-                                                 "download_function": UCSC_download_sql_file,
-                                                 "download_params": [track, genome, bed_columns]}
-                    # Some bigDataURL files are store in sql db
-                    elif "fileName" in columns:  # bigWig files do not like big data url in API, only in sql table
-                        big_data_URL = list(pd.read_sql("Select fileName from {}.{}".format(genome, track), con=db)["fileName"])[0]
-                        if big_data_URL.split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:
-                            files_info[track] = {"file_size": info["itemCount"],
-                                                "download_function" : UCSC_download_bigDataUrl_file,
-                                                "download_params": [track, genome, big_data_URL, info["type"]]}   
-    return files_info
+                # If no bigDataURL than it must be uncompressed in sql db
+                if "bigDataUrl" not in info.keys() and info["itemCount"] > 0:
+                    with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
+                        # Retrieve column name from sql db track table
+                        try:
+                            columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
+                            if len(columns) > 4:  # Some files just don't have any info in them
+                                bed_columns = extract_bed_columns(columns, info["type"])
+                                if "" not in bed_columns:  # else 
+                                    files_info[track] = {"file_size": info["itemCount"],
+                                                            "download_function": UCSC_download_sql_file,
+                                                            "download_params": [track, genome, bed_columns]}
+                            # Some bigDataURL files are store in sql db
+                            elif "fileName" in columns:  # bigWig files do not like big data url in API, only in sql table
+                                    big_data_URL = list(pd.read_sql("Select fileName from {}.{}".format(genome, track), con=db)["fileName"])[0]
+                                    if big_data_URL.split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:
+                                        files_info[track] = {"file_size": info["itemCount"],
+                                                            "download_function" : UCSC_download_bigDataUrl_file,
+                                                            "download_params": [track, genome, big_data_URL, info["type"], HUB_EXT]} 
+                        except:
+                            print("SQL Table {}.{} not found and no big data URL in API".format(genome, track))  
+        return files_info
+    except Exception as e:
+        print(e)
+        return "error"
 
 
 def UCSC_download_sql_file(index, params):
@@ -340,20 +357,34 @@ def UCSC_download_bigDataUrl_file(index, params):
     nothing
     """
 
-    bigDataURL = params[2]
+    bigDataURL = params[2]#.replace("http://","")
+    print(bigDataURL)
     file_type = bigDataURL.split(".")[-1]
     track = params[0]
-    # UCSC_utilities/bigBedToBed input_file output_file
-    if "bb" == file_type:
-        os.system("UCSC_utilities/bigBedToBed " + config.UCSC_BIG_DATA_LINK + "{} data/{}/{}.bed".format(bigDataURL, index, track))
-    elif "bw" == file_type:
-        os.system("UCSC_utilities/bigWigToBedGraph " + config.UCSC_BIG_DATA_LINK + "{} data/{}/{}".format(bigDataURL, index, track + ".bed"))
-    elif "bigPsl" == file_type:
-        os.system("UCSC_utilities/bigPslToPsl " + config.UCSC_BIG_DATA_LINK + "{} data/{}/{}.psl".format(bigDataURL, index, track))
-        os.system("UCSC_utilities/pslToBed data/{}/{} data/{}/{}.bed".format(index, track + ".psl", index, track))
-        os.remove("data/{}/{}".format(index, track + ".psl"))
+
+    if params[-1] != "":
+        ucsc_download_link = ""
     else:
-        print("File {} of type not able to be converted".format(track, file_type))
+        ucsc_download_link = config.UCSC_BIG_DATA_LINK#.replace("http://","")
+
+
+    # UCSC_utilities/bigBedToBed input_file output_file
+    try:
+
+        if "bb" == file_type:
+            cmd = "UCSC_utilities/bigBedToBed {}{} data/{}/{}.bed".format(ucsc_download_link, bigDataURL, index, track)
+            subprocess.check_output(cmd.split(" "), timeout = config.timeout_file_download)
+        elif "bw" == file_type:
+            cmd = "UCSC_utilities/bigWigToBedGraph {}{} data/{}/{}".format(ucsc_download_link, bigDataURL, index, track + ".bed")
+            subprocess.check_output(cmd.split(" "), timeout = config.timeout_file_download)
+        elif "bigPsl" == file_type:
+            subprocess.check_output("UCSC_utilities/bigPslToPsl {}{} data/{}/{}.psl".format(ucsc_download_link, bigDataURL, index, track).split(" "), timeout = config.timeout_file_download)
+            subprocess.check_output("UCSC_utilities/pslToBed data/{}/{} data/{}/{}.bed".format(index, track + ".psl", index, track).split(" "))
+            os.remove("data/{}/{}".format(index, track + ".psl"))
+        else:
+            print("File {} of type not able to be converted".format(track, file_type))
+    except Exception as e:
+        print(track, e)
 
 
 def UCSC_metadata(genome):
@@ -383,6 +414,79 @@ def UCSC_metadata_extract_description(html):
                 index = htmldescr.find("<p>")
             return htmldescr[index:len(htmldescr)]
     return ""
+
+######################
+# UCSC HUB FUNCTIONS #
+######################
+
+def setup_UCSC_HUBS(hub_names, conn):
+    hubs = UCSC_collect_hubs(hub_names)
+    for hub in hubs:
+        for genome in hub["genomes"]:
+            # collect file information
+            files_info = UCSC_collect_file_info(genome, "hubUrl={};".format(hub["hub_url"]))
+            if isinstance(files_info, str):
+                continue
+            # cluster files based on hyperparam in .config
+            clustered_files_info = cluster_data(hub["hub_short_label"].replace(" ",""), genome, files_info)
+            # iterate through each cluster then download and index cluster files
+            metadata = UCSC_hubs_metadata(hub, genome)
+
+            for index, index_info in clustered_files_info.items():
+                # extract files for the index
+                files = list(index_info["files"].keys())
+                # grab metadata pertaining to those files
+                relevant_metadata = metadata[metadata['file_name'].isin(files)]
+                index_metadata = pd.merge(relevant_metadata, 
+                                        pd.DataFrame([[i] for i in files], columns=['file_name']),
+                                        on ="file_name",
+                                        how ="right")
+                index_metadata.fillna("")
+                setup_indices(hub["hub_short_label"] + "(UCSC HUB)", genome, index, index_info, metadata, conn)
+
+def UCSC_collect_hubs(hub_names):
+    hubs = requests.get(url = config.UCSC_API + "/list/publicHubs").json()["publicHubs"]
+    hubs_info = []
+    print(hub_names)
+    for hub in hubs:
+        if hub["shortLabel"] in hub_names:#hub["dbList"].split(","):
+            hubs_info.append({
+                "hub_url": hub["hubUrl"],
+                "hub_short_label": hub["shortLabel"],
+                "hub_long_label": hub["longLabel"],
+                "descriptionUrl": hub["descriptionUrl"],
+                "genomes": hub["dbList"].split(",")
+            })
+
+    return hubs_info
+
+# http://hgdownload.soe.ucsc.edu/hubs/mouseStrains/GCA_001624445.1_CAST_EiJ_v1/html/GCA_001624445.1_CAST_EiJ_v1.assembly
+# http://hgdownload.soe.ucsc.edu/hubs/mouseStrains/     html/GCA_001624445.1_CAST_EiJ_v1.ensGene
+# huburl + html_url.split("tml/")[1] + 
+
+
+def UCSC_hubs_metadata(hub, genome):
+    url = "{}/list/tracks?hubUrl={};genome={};trackLeavesOnly=1".format(config.UCSC_API, hub["hub_url"], genome)
+    track_metadata = requests.get(url = url).json()[genome]
+    hub_info_string = "This file is from the UCSC public hub <a href=\"{}\">{} : {}</a>".format(hub["descriptionUrl"], hub["hub_short_label"], hub["hub_long_label"])
+    # retrieve descriptions through html key
+    for track, info in track_metadata.items():
+        if "html" in info.keys():
+            url = hub["hub_url"][:-7] + info["html"][5:-(len(track)+1)] + "/" + info["html"]
+            #print(html_url)
+            response = requests.get(url=url)
+            track_metadata[track]["short_info"] = UCSC_metadata_extract_description(str(response.content) )+ "\\n" + hub_info_string 
+            track_metadata[track]["long_info"] = response.content
+        else:
+            track_metadata[track]["short_info"] = hub_info_string 
+            track_metadata[track]["long_info"] = ""
+
+
+    metadata_df = pd.DataFrame(track_metadata).transpose()
+    metadata_df.reset_index(level=0, inplace=True)
+    metadata_df = metadata_df.rename(columns={"index":"file_name", "shortLabel":"short_name", "longLabel":"long_name"})
+
+    return metadata_df[["file_name", "short_name", "long_name", "short_info", "long_info"]]
 
 ##########################
 # LOCAL GENOME FUNCTIONS #
@@ -462,11 +566,12 @@ if __name__ == "__main__":
     conn = sqlite3.connect('Indexing.db')  # make connection to database
 
     # make directories for data and indicies 
-    proc = subprocess.check_call("mkdir -p data", shell=True)
-    proc = subprocess.check_call("mkdir -p indices", shell=True)
+    proc = subprocess.check_output("mkdir -p data", shell=True)
+    proc = subprocess.check_output("mkdir -p indices", shell=True)
 
     # setup data sources
     setup_UCSC_GENOMES(config.UCSC_GENOMES, conn)
+    setup_UCSC_HUBS(config.UCSC_HUBS[:-1], conn)
     setup_LOCAL(config.LOCAL_GENOMES, conn)
 
     conn.commit()
