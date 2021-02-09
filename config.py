@@ -37,7 +37,7 @@ class config:
     # List genomes from UCSC to download and index
     '''
     example:
-        CSC_GENOMES = ["hg19", "rn6"]
+        UCSC_GENOMES = ["hg19", "rn6"]
     '''
     UCSC_GENOMES = []
 
