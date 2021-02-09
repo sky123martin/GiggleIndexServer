@@ -20,7 +20,7 @@ class config:
     UCSC_SQL_DB_USER = "genome"
     UCSC_API = "https://api.genome.ucsc.edu"
 
-    ###############################
+     ###############################
     # USER CONFIGURABLE VARIABLES #
     ###############################
 
@@ -34,31 +34,53 @@ class config:
     timeout_file_download = 1000
     timeout_file_processing = 100
 
-    # Genome from UCSC to download and index
+    # List genomes from UCSC to download and index
+    '''
+    example:
+        CSC_GENOMES = ["hg19", "rn6"]
+    '''
     UCSC_GENOMES = ["rn6"]
 
-    # Local genomes to download and index 
+    # List local genomes to download and index 
     # Format: {<genome name>: [<path to data>, <path metadata file name>],...
     # Example  {"lab data" : ["local/", "local/metadata.csv"]}{"localgenome": ["local/", "", "rn6"]}
+    '''
+    example:
+        LOCAL_GENOMES = [
+                         {
+                         "project_name": "test",
+                         "reference_genome": "hg19",
+                         "metadata_path": "",
+                         "data_path": "roadmap_sort/"
+                         },
+                        ...]
+    '''
     LOCAL_GENOMES = []
-                    # [{"project_name": "test",
-                    #   "reference_genome": "hg19",
-                    #   "metadata_path": "",
-                    #   "data_path": "roadmap_sort/"
-                    #   }]
+
 
     # Metadata file for local directories
     # Format: .csv format with columns = ["file_name", "short_name", "long_name", "short_info", "long_info"]
     # Example  "metadata.csv"
 
-    # Select hubs to index
+    # Uncomment UCSC public hubs to index, see https://api.genome.ucsc.edu/list/publicHubs for further info on each hub 
+    '''
+    example:
+        UCSC_HUBS = [
+            # "ALFA Hub",
+            "Bird assemblies",
+            # "Blueprint Hub",
+            ...
+            ""
+            ]
+    '''
+
     UCSC_HUBS = [
                 # "ALFA Hub",
                 # "Bird assemblies",
                 # "Blueprint Hub",
                 # "BrainEpigenomeHub",
                 # "Breast Cancer lncRNA",
-                # "Broad Improved Canine Annotation v1",
+                "Broad Improved Canine Annotation v1",
                 # "C_elegans_isolates",
                 # "CADD",
                 # "Cancer Genomics Tracks",

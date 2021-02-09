@@ -9,8 +9,9 @@ conn.execute('''CREATE TABLE INDICES
          (NAME      TEXT    NOT NULL,
           ITER      INT     NOT NULL,
           DATE      NUMERIC NOT NULL,
+          PROJECT   TEXT    NOT NULL,
           SOURCE    TEXT    NOT NULL,
-          GENOME    EXT     NOT NULL,
+          GENOME    TEXT    NOT NULL,
           FULL      NUMERIC NOT NULL,
           SIZE      INT     NOT NULL);''')
 
@@ -19,6 +20,7 @@ conn.execute('''CREATE TABLE FILES
          (NAME      TEXT     NOT NULL,
           DATE      NUMERIC  NOT NULL,
           SOURCE    TEXT     NOT NULL,
+          PROJECT   TEXT     NOT NULL,
           GENOME    TEXT     NOT NULL,
           SIZE      INT      NOT NULL,
           INDEXNAME TEXT     NOT NULL,

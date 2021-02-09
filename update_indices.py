@@ -118,21 +118,24 @@ def update_LOCAL(genome):
             setup_indices("local", genome, index, index_info, index_metadata, conn)
 
 
-def update(source, genome):
-    if source == "UCSC":
+def update(source, project, genome):
+    if source == "UCSC" and project == "UCSC Genomes":
         update_UCSC(genome)
     elif source == "local":
         update_LOCAL(genome)
+    else:
+        print("No compatible update function {}, {}, {}".format(source, project, genome))
 
 
 if __name__ == "__main__":
     global conn
     conn = sqlite3.connect(config.DB)
-    out = conn.execute("SELECT DISTINCT SOURCE, GENOME from FILES")
+    out = conn.execute("SELECT DISTINCT SOURCE, PROJECT, GENOME from FILES")
     for row in out:
         source = row[0]
-        genome = row[1]
-        update(source, genome)
+        project= row[1]
+        genome = row[2]
+        update(source, project, genome)
 
         conn.commit()
     conn.close()

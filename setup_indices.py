@@ -14,6 +14,8 @@ from shutil import copyfile
 import subprocess
 import re
 import numpy as np
+from math import isnan
+
 
 config = config
 
@@ -155,20 +157,19 @@ def giggle_index(path, dest):
         proc = subprocess.check_output(cmd_str,
                                         shell=True,
                                         timeout=config.timeout_file_processing)
-    # os.mkdir(temp_path)
-        print(cmd_str)
+        #print(cmd_str)
         cmd_str = 'giggle/scripts/sort_bed \"' + path + '/*.bed*\" ' + temp_path + ' 4'
         proc = subprocess.check_output(cmd_str,
                                         shell=True,
                                         timeout=config.timeout_file_processing)
 
-        print(cmd_str)
+        #print(cmd_str)
         delete_directory(path)
         cmd_str = 'mv ' + temp_path + ' ' + path
         proc = subprocess.check_output(cmd_str,
                                         shell=True,
                                         timeout=config.timeout_file_processing)
-        print(cmd_str)
+        #print(cmd_str)
         cmd_str = 'giggle index -s -f -i \"' + path + '/*.bed.gz\" -o ' + dest + '.d'
         proc = subprocess.check_output(cmd_str,
                                     shell=True,
@@ -183,7 +184,7 @@ def giggle_index(path, dest):
     return
 
 
-def setup_indices(source, genome, index, index_info, metadata, conn):
+def setup_indices(source, project, genome, index, index_info, metadata, conn):
     with alive_bar(len(index_info["files"])+1, bar = 'blocks', spinner = 'classic') as bar:
         # create index directory
         proc = subprocess.check_output("mkdir -p data/"+index, shell=True)
@@ -195,11 +196,12 @@ def setup_indices(source, genome, index, index_info, metadata, conn):
             bar()
             file_info["download_function"](index, file_info["download_params"])
             if os.path.isfile("data/"+index + "/" + track_name + ".bed") or os.path.isfile("data/"+index + "/" + track_name + ".bed.gz"):
-                conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, GENOME, SIZE, INDEXNAME, SHORTNAME, LONGNAME, SHORTINFO, LONGINFO) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, PROJECT, GENOME, SIZE, INDEXNAME, SHORTNAME, LONGNAME, SHORTINFO, LONGINFO) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                         (
                                         track_name,
                                         date.today(),
                                         source,
+                                        project,
                                         genome,
                                         file_info["file_size"],
                                         index,
@@ -213,8 +215,8 @@ def setup_indices(source, genome, index, index_info, metadata, conn):
 
         bar.text("Creating {}: indexing files".format(index))
         if len(glob.glob(os.path.join("data/"+index, "*"))) > 0:
-            conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, GENOME, FULL, SIZE) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                (index, index.split("_")[-1], date.today(), source, genome, index_info["full"], index_info["index_size"],))
+            conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, PROJECT, GENOME, FULL, SIZE) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                (index, index.split("_")[-1], date.today(), source, project, genome, index_info["full"], index_info["index_size"],))
 
             giggle_index("data/"+index, "indices/"+index)
 
@@ -256,8 +258,46 @@ def setup_UCSC_GENOMES(genomes, conn):
                                     how ="right")
             index_metadata.fillna("")
             # setup this index
-            setup_indices("UCSC", genome, index, index_info, index_metadata, conn)
+            setup_indices("UCSC", "UCSC Genomes", genome, index, index_info, index_metadata, conn)
 
+# def UCSC_parse_file_info(row):
+#     info = row.to_dict() 
+#     track = info["file_name"]
+#     print(info.keys())
+#     print(info)
+#     info = {k: v for k, v in info if not isnan(v)}
+#     # Sometimes the track name != table name, restore track as tablename
+#     track = info["table"] if "table" in info.keys() and not isnan(info["table"]) else track
+
+#     # If bigData URL is included and not empty then file has been compressed for storage
+#     if "bigDataUrl" in info.keys() and info["itemCount"] > 0 and info["bigDataUrl"].split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:  # if stored as a big data file
+#         file_size = info["itemCount"]
+#         download_function = UCSC_download_bigDataUrl_file,
+#         download_params = [track, genome, info["bigDataUrl"], info["type"], HUB_EXT]
+
+
+#     # If no bigDataURL than it must be uncompressed in sql db
+#     if "bigDataUrl" not in info.keys() and info["itemCount"] > 0:
+#         with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
+#             # Retrieve column name from sql db track table
+#             try:
+#                 columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
+#                 if len(columns) > 4:  # Some files just don't have any info in them
+#                     bed_columns = extract_bed_columns(columns, info["type"])
+#                     if "" not in bed_columns:  # else 
+#                         files_info[track] = {"file_size": info["itemCount"],
+#                                                 "download_function": UCSC_download_sql_file,
+#                                                 "download_params": [track, genome, bed_columns]}
+#                 # Some bigDataURL files are store in sql db
+#                 elif "fileName" in columns:  # bigWig files do not like big data url in API, only in sql table
+#                         big_data_URL = list(pd.read_sql("Select fileName from {}.{}".format(genome, track), con=db)["fileName"])[0]
+#                         if big_data_URL.split(".")[-1] in config.UCSC_ACCEPTABLE_FILE_FORMATS:
+#                             files_info[track] = {"file_size": info["itemCount"],
+#                                                 "download_function" : UCSC_download_bigDataUrl_file,
+#                                                 "download_params": [track, genome, big_data_URL, info["type"], HUB_EXT]} 
+#             except:
+#                 print("SQL Table {}.{} not found and no big data URL in API".format(genome, track))  
+#         return pd.Series([file_name, file_size, download_function, download_params])
 
 def UCSC_collect_file_info(genome, HUB_EXT):
     """ uses UCSC API to gather download info for each track in a specific genome
@@ -274,6 +314,12 @@ def UCSC_collect_file_info(genome, HUB_EXT):
     print("REQUEST URL", request_url)
     try:
         tracks = requests.get(url=request_url).json()[genome]
+        # tracks_df = pd.DataFrame(tracks).transpose()
+        # tracks_df.reset_index(level=0, inplace=True)
+        # tracks_df = tracks_df.rename(columns={"index":"file_name"})
+        # # tracks_df[["file_size", "download_function", "download_params"]] = tracks_df.apply(UCSC_parse_file_info, axis=1)
+
+        # print(tracks_df.head())
 
         files_info = {}  # Create empty dict to fill with info
         with alive_bar(len(tracks), bar='bubbles', spinner='classic') as bar:  # Start progress bar
@@ -391,7 +437,7 @@ def UCSC_metadata(genome):
     with connect_SQL_db(config.UCSC_SQL_DB_HOST, "genome") as db:
         query = "SELECT tableName AS file_name, shortLabel AS short_name, longLabel as long_name, html as long_info from {}.trackDb order by tableName".format(genome)
         df_metadata = pd.read_sql(query, con=db)
-
+    
     df_metadata = df_metadata.fillna("")
     df_metadata["short_info"] = ""
 
@@ -399,7 +445,6 @@ def UCSC_metadata(genome):
         row["long_info"] = row["long_info"].decode('latin-1') 
         if row["long_info"] != "":
             row["short_info"] = UCSC_metadata_extract_description(row["long_info"])
-
     return df_metadata
 
 
@@ -442,14 +487,14 @@ def setup_UCSC_HUBS(hub_names, conn):
                                         on ="file_name",
                                         how ="right")
                 index_metadata.fillna("")
-                setup_indices(hub["hub_short_label"] + "(UCSC HUB)", genome, index, index_info, metadata, conn)
+                setup_indices("UCSC", hub["hub_short_label"], genome, index, index_info, metadata, conn)
 
 def UCSC_collect_hubs(hub_names):
     hubs = requests.get(url = config.UCSC_API + "/list/publicHubs").json()["publicHubs"]
     hubs_info = []
     print(hub_names)
     for hub in hubs:
-        if hub["shortLabel"] in hub_names:#hub["dbList"].split(","):
+        if hub["longLabel"] in hub_names:#hub["dbList"].split(","):
             hubs_info.append({
                 "hub_url": hub["hubUrl"],
                 "hub_short_label": hub["shortLabel"],
@@ -457,6 +502,7 @@ def UCSC_collect_hubs(hub_names):
                 "descriptionUrl": hub["descriptionUrl"],
                 "genomes": hub["dbList"].split(",")
             })
+        print("\"{}\",".format(hub["longLabel"]))
 
     return hubs_info
 
@@ -510,7 +556,7 @@ def setup_LOCAL(projects, conn):
                                     how = "right")
             index_metadata.fillna("")
             
-            setup_indices(project["project_name"], project["reference_genome"], index, index_info, index_metadata, conn)
+            setup_indices("LOCAL", project["project_name"], project["reference_genome"], index, index_info, index_metadata, conn)
 
 
 def local_collect_file_info(path):

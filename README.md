@@ -1,7 +1,7 @@
 # Setup
 ## Setup: Environment
 
-Must have Giggle and bgzip (https://vcf.iobio.io/help.html) setup on local machine.
+Must have Giggle, pip, conda, and bgzip (https://vcf.iobio.io/help.html) setup on local machine.
 
 Clone directory
 ```
@@ -45,23 +45,70 @@ pip3 install -r requirements.txt
 ## Setup: Configuration Variables
 The file config.py is where you input the genomes you want to index and clustering params.
 ```
-    ###############################
+     ###############################
     # USER CONFIGURABLE VARIABLES #
     ###############################
-
+    
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = ?
+    MAX_INTERVALS_PER_INDEX = 1000000
 
     # Number of proccesses available to server
-    AVAILABLE_PROCCESSES = ?
+    AVAILABLE_PROCCESSES = 4
 
-    # Genome from UCSC to download and index
-    UCSC_GENOMES = [?]
+    # Timeout on a file download
+    timeout_file_download = 1000
+    timeout_file_processing = 100
 
-    # Local genomes to download and index 
-    # Format: {<genome name>: <path to data>,...
-    # Example  {"lab data" : "local/"}
-    LOCAL_GENOMES = {?}
+    # List genomes from UCSC to download and index
+    '''
+    example:
+        CSC_GENOMES = ["hg19", "rn6"]
+    '''
+    UCSC_GENOMES = []
+
+    # List local genomes to download and index 
+    # Format: {<genome name>: [<path to data>, <path metadata file name>],...
+    # Example  {"lab data" : ["local/", "local/metadata.csv"]}{"localgenome": ["local/", "", "rn6"]}
+    '''
+    example:
+        LOCAL_GENOMES = [
+                         {
+                         "project_name": "test",
+                         "reference_genome": "hg19",
+                         "metadata_path": "",
+                         "data_path": "roadmap_sort/"
+                         },
+                        ...]
+    '''
+    LOCAL_GENOMES = []
+
+
+    # Metadata file for local directories
+    # Format: .csv format with columns = ["file_name", "short_name", "long_name", "short_info", "long_info"]
+    # Example  "metadata.csv"
+
+    # Uncomment UCSC public hubs to index, see https://api.genome.ucsc.edu/list/publicHubs for further info on each hub 
+    '''
+    example:
+        UCSC_HUBS = [
+            # "ALFA Hub",
+            "Bird assemblies",
+            # "Blueprint Hub",
+            ...
+            ""
+            ]
+    '''
+
+    UCSC_HUBS = [
+                # "ALFA Hub",
+                # "Bird assemblies",
+                # "Blueprint Hub",
+                # "BrainEpigenomeHub",
+                ...
+                ""
+                ]
+
+    
 ```
 
 ## Setup: Test
