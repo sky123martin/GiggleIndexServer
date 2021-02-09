@@ -39,11 +39,9 @@ class config:
     example:
         CSC_GENOMES = ["hg19", "rn6"]
     '''
-    UCSC_GENOMES = ["rn6"]
+    UCSC_GENOMES = []
 
     # List local genomes to download and index 
-    # Format: {<genome name>: [<path to data>, <path metadata file name>],...
-    # Example  {"lab data" : ["local/", "local/metadata.csv"]}{"localgenome": ["local/", "", "rn6"]}
     '''
     example:
         LOCAL_GENOMES = [
@@ -80,7 +78,7 @@ class config:
                 # "Blueprint Hub",
                 # "BrainEpigenomeHub",
                 # "Breast Cancer lncRNA",
-                "Broad Improved Canine Annotation v1",
+                # "Broad Improved Canine Annotation v1",
                 # "C_elegans_isolates",
                 # "CADD",
                 # "Cancer Genomics Tracks",
