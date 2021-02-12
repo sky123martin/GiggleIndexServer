@@ -492,9 +492,9 @@ def setup_UCSC_HUBS(hub_names, conn):
 def UCSC_collect_hubs(hub_names):
     hubs = requests.get(url = config.UCSC_API + "/list/publicHubs").json()["publicHubs"]
     hubs_info = []
-    print(hub_names)
+    # print(hub_names)
     for hub in hubs:
-        if hub["longLabel"] in hub_names:#hub["dbList"].split(","):
+        if hub["shortLabel"] in hub_names:#hub["dbList"].split(","):
             hubs_info.append({
                 "hub_url": hub["hubUrl"],
                 "hub_short_label": hub["shortLabel"],
@@ -502,7 +502,7 @@ def UCSC_collect_hubs(hub_names):
                 "descriptionUrl": hub["descriptionUrl"],
                 "genomes": hub["dbList"].split(",")
             })
-        print("\"{}\",".format(hub["longLabel"]))
+        # print("\"{}\",".format(hub["longLabel"]))
 
     return hubs_info
 
@@ -575,7 +575,7 @@ def local_collect_file_info(path):
     return files_info
 
 def clean_file_name(file_name):
-    return file_name.split("/")[-1].split(".")[0]
+    return file_name.split("/")[-1].replace(".bed", "").replace(".gz", "")
 
 def local_metadata(path):
     necesary_columns = ["file_name", "short_name", "long_name", "short_info", "long_info"]
@@ -603,7 +603,14 @@ def local_metadata(path):
 def LOCAL_download_file(index, params):
     file_name = params[1]
     path = params[0]
-    copyfile(path+"/"+file_name, "data/"+index+"/"+file_name)
+    print(file_name)
+    try:
+        copyfile(path+"/"+file_name, "data/"+index+"/"+file_name)
+    except:
+        cmd_str = "cp {}/{} data/{}/{}".format(path, file_name, index, file_name)
+        proc = subprocess.check_output(cmd_str,
+                                        shell=True,
+                                        timeout=config.timeout_file_download)
 
 
 if __name__ == "__main__":

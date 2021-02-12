@@ -117,6 +117,7 @@ Errors in config test functions mean that you may have entered invalid config va
 nose2 --verbose
 ```
 
+
 # Index Files
 
 ```
@@ -183,4 +184,33 @@ Query a file on a specfic source and genome
 python3 query_indices.py --qf local/testbed.bed.gz rn6 UCSC
 ```
 
+## Data
+The following that can be used to setup local repositories:
 
+Roadmap Epigenomics: https://s3.amazonaws.com/layerlab/giggle/roadmap/roadmap_sort.tar.gz
+
+Fantom5: https://s3.amazonaws.com/layerlab/giggle/fantom/fantom_sort.tar.gz
+
+
+
+### Making Fantom5 a local repo:
+Download relavent data into GiggleIndexServer/ directory
+```
+cd GiggleIndexServer
+
+curl https://s3.amazonaws.com/layerlab/giggle/fantom/fantom_sort.tar.gz
+
+gzip -d < fantom_sort.tar.gz | tar xvf -
+
+rm fantom_sort.tar.gz
+```
+Add the following entry to the LOCAL_GENOMES list in config.py
+
+```
+  {
+  "project_name": "fantom5",
+  "reference_genome": "hg19",
+  "metadata_path": "",
+  "data_path": "fantom_sort/"
+  }
+```

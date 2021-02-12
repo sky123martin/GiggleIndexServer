@@ -25,14 +25,14 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 1000000
+    MAX_INTERVALS_PER_INDEX = 100000000
 
     # Number of proccesses available to server
     AVAILABLE_PROCCESSES = 4
 
-    # Timeout on a file download
+    # Timeout on a file download in seconds
     timeout_file_download = 1000
-    timeout_file_processing = 100
+    timeout_file_processing = 60*5 # 5 minutes
 
     # List genomes from UCSC to download and index
     '''
@@ -53,7 +53,12 @@ class config:
                          },
                         ...]
     '''
-    LOCAL_GENOMES = []
+    LOCAL_GENOMES = [  {
+  "project_name": "fantom5",
+  "reference_genome": "hg19",
+  "metadata_path": "",
+  "data_path": "fantom_sort/"
+  }]
 
 
     # Metadata file for local directories
