@@ -19,8 +19,8 @@ conn.execute('''DROP TABLE IF EXISTS FILES;''')
 conn.execute('''CREATE TABLE FILES
          (NAME      TEXT     NOT NULL,
           DATE      NUMERIC  NOT NULL,
-          SOURCE    TEXT     NOT NULL,
           PROJECT   TEXT     NOT NULL,
+          SOURCE    TEXT     NOT NULL,
           GENOME    TEXT     NOT NULL,
           SIZE      INT      NOT NULL,
           INDEXNAME TEXT     NOT NULL,

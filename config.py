@@ -20,26 +20,26 @@ class config:
     UCSC_SQL_DB_USER = "genome"
     UCSC_API = "https://api.genome.ucsc.edu"
 
-     ###############################
+    ###############################
     # USER CONFIGURABLE VARIABLES #
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 100000000
+    MAX_INTERVALS_PER_INDEX = 10000000
 
     # Number of proccesses available to server
-    AVAILABLE_PROCCESSES = 4
+    AVAILABLE_PROCCESSES = 12
 
     # Timeout on a file download in seconds
-    timeout_file_download = 1000
-    timeout_file_processing = 60*5 # 5 minutes
+    timeout_file_download = 60*5
+    timeout_file_processing = 60*10 # 10 minutes
 
     # List genomes from UCSC to download and index
     '''
     example:
         UCSC_GENOMES = ["hg19", "rn6"]
     '''
-    UCSC_GENOMES = []
+    UCSC_GENOMES = ["hg19"]
 
     # List local genomes to download and index 
     '''
@@ -53,12 +53,14 @@ class config:
                          },
                         ...]
     '''
-    LOCAL_GENOMES = [  {
-  "project_name": "fantom5",
-  "reference_genome": "hg19",
-  "metadata_path": "",
-  "data_path": "fantom_sort/"
-  }]
+    LOCAL_GENOMES = []
+                    #   {
+                    #     "project_name": "fantom5",
+                    #     "reference_genome": "hg19",
+                    #     "metadata_path": "",
+                    #     "data_path": "fantom_sort/"
+                    #     }
+                    # ]
 
 
     # Metadata file for local directories

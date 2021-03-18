@@ -38,7 +38,7 @@ class BasicTests(unittest.TestCase):
     def test_UCSC_API_track_structure(self):
         # testing if track structure holds
         genome = "rn6"
-        r = requests.get('{}list/tracks?genome={};trackLeavesOnly=1'.format(config.UCSC_API, "rn6"))
+        r = requests.get('{}/list/tracks?genome={};trackLeavesOnly=1'.format(config.UCSC_API, "rn6"))
         self.assertEqual(r.status_code, requests.codes.ok)
         rn6_leaves = r.json()["rn6"]
         r = requests.get('{}/list/tracks?genome={}'.format(config.UCSC_API, "rn6"))
@@ -88,94 +88,84 @@ class BasicTests(unittest.TestCase):
     ######################
     # Data Scapper Tests #
     ######################
-    def test_target_columns(self):
-        # Local test of target_columns
+    def test_extract_bed_columns(self):
+        # Local test of extract_bed_columns
         file_type = "chain ailMel1"
         columns = ['bin', 'score', 'tName', 'tSize', 'tStart', 'tEnd', 'qName', 'qSize', 'qStrand', 'qStart', 'qEnd', 'id']
-        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"tName": "chrom", "tStart":"start", "tEnd":"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "netAlign panTro5 chainPanTro5"
         columns = ['bin', 'level', 'tName', 'tStart', 'tEnd', 'strand', 'qName', 'qStart', 'qEnd', 'chainId', 'ali', 'score', 'qOver', 'qFar', 'qDup', 'type', 'tN', 'qN', 'tR', 'qR', 'tNewR', 'qNewR', 'tOldR', 'qOldR', 'tTrf', 'qTrf']
-        expected_result = ['tName', 'tStart', 'tEnd', 0]
-        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"tName":"chrom", "tStart":"start", "tEnd":"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "bed 4 +"
         columns = ['bin', 'chrom', 'chromStart', 'chromEnd', 'name', 'period', 'copyNum', 'consensusSize', 'perMatch', 'perIndel', 'score', 'A', 'C', 'G', 'T', 'entropy', 'sequence']
-        expected_result = ['chrom', 'chromStart', 'chromEnd', 0]
-        expected_result = {"chrom": "chrom", "start": "chromStart", "end": "chromEnd", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"chrom": "chrom", "chromStart":"start", "chromEnd":"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "bed 4"
         columns = ['chrom', 'chromStart', 'chromEnd', 'name']
-        expected_result = {"chrom": "chrom", "start": "chromStart", "end": "chromEnd", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"chrom":"chrom", "chromStart":"start", "chromEnd": "end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "psl est"
         columns = ['bin', 'matches', 'misMatches', 'repMatches', 'nCount', 'qNumInsert', 'qBaseInsert', 'tNumInsert', 'tBaseInsert', 'strand', 'qName', 'qSize', 'qStart', 'qEnd', 'tName', 'tSize', 'tStart', 'tEnd', 'blockCount', 'blockSizes', 'qStarts', 'tStarts']
-        expected_result = {"chrom": "tName", "start": "tStart", "end": "tEnd", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"tName":"chrom", "tStart":"start", "tEnd":"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "genePred genscanPep"
         columns = ['bin', 'name', 'chrom', 'strand', 'txStart', 'txEnd', 'cdsStart', 'cdsEnd', 'exonCount', 'exonStarts', 'exonEnds']
-        expected_result = {"chrom": "chrom", "start": 'txStart', "end": 'txEnd', "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"chrom": "chrom", 'txStart':"start", 'txEnd':"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "rmsk"
         columns = ['bin', 'swScore', 'milliDiv', 'milliDel', 'milliIns', 'genoName', 'genoStart', 'genoEnd', 'genoLeft', 'strand', 'repName', 'repClass', 'repFamily', 'repStart', 'repEnd', 'repLeft', 'id']
-        expected_result = {"chrom": 'genoName', "start": 'genoStart', "end": 'genoEnd', "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {'genoName':"chrom", 'genoStart':"start", 'genoEnd':"end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
         file_type = "GFF"
         columns = ["start", "end", "chrom"]
-        expected_result = {"chrom": "chrom", "start": "start", "end": "end", "base shift": -1}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
+        expected_mapping = {"chrom": "chrom", "start": "start", "end": "end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, -1)
 
         file_type = "MAF"
         columns = ["start", "end", "chrom"]
-        expected_result = {"chrom": "chrom", "start": "start", "end": "end", "base shift": 0}
-        result = target_columns(columns, file_type)
-        self.assertEqual(result, expected_result)
-
-    def test_UCSC_extract_bed_columns(self):
-        # Integration test of both target_columns and UCSC servers
-        # Iterate through a genome in UCSC and make sure target_columns runs
-        with connect_SQL_db(config.UCSC_SQL_DB_HOST, config.UCSC_SQL_DB_USER) as db:
-            test_genomes = ["rn6"]
-            for genome in test_genomes:  # iterate through all genomes being checked
-                tracks_info = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(config.UCSC_API, genome)).json()[genome]
-                # unzip track details and names
-                for track, track_info in tracks_info.items():
-                    # sometimes table lists the track name instead of the key of the dict
-                    if "table" in track_info:
-                        track = track_info["table"]
-                    # bigDataUrl then the file needs to be downloaded/parsed
-                    if "bigDataUrl" not in track_info:
-                        columns = list(pd.read_sql("Show columns from {}.{}".format(genome, track), con=db)["Field"])
-                        if len(columns) > 2:  # Some files just don't have any info on them
-                            result = extract_bed_columns(columns, track_info["type"])
-                            self.assertTrue([result])
+        expected_mapping = {"chrom": "chrom", "start": "start", "end": "end"}
+        mapping, bs = extract_bed_columns(columns, file_type)
+        self.assertEqual(expected_mapping, mapping)
+        self.assertEqual(bs, 0)
 
     ####################
     # Config Variables #
     ####################
 
     def test_CONFIG_VAR_MAX_INTERVAL_PER_INDEX(self):
+        """ Failure of this test implies that MAX_INTERVALS_PER_INDEX is negative"""
         self.assertGreater(config.MAX_INTERVALS_PER_INDEX, 0)
-        genome = "rn6"
-        tracks_info = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(config.UCSC_API, genome)).json()[genome]
-        # unzip track details and names
-        for track, track_info in tracks_info.items():
-            self.assertGreaterEqual(config.MAX_INTERVALS_PER_INDEX, track_info["itemCount"])
+        # genome = "rn6"
+        # for i in 
+        # tracks_info = requests.get(url="{}/list/tracks?genome={};trackLeavesOnly=1".format(config.UCSC_API, genome)).json()[genome]
+        # # unzip track details and names
+        # for track, track_info in tracks_info.items():
+        #     self.assertGreaterEqual(config.MAX_INTERVALS_PER_INDEX, track_info["itemCount"])
   
     ##################
     # Indexing Tests #
@@ -227,15 +217,6 @@ class BasicTests(unittest.TestCase):
                                 "index_size": testing_size}
                           }                     
         self.assertTrue(expected_clusters == clusters)
-
-    ############
-    # DB Tests #
-    ############
-
-    ##################
-    # Updating Tests #
-    ##################
-
 
 
 if __name__ == "__main__":
