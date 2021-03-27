@@ -25,11 +25,13 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 10000000
+    MAX_INTERVALS_PER_INDEX = 1000000
 
     # Number of proccesses available to server
     AVAILABLE_PROCCESSES = 12
 
+    # Max file size for setup (intervals)
+    max_setup_file_size = 100000*155 # conversion: ~155 intervals per KB, 1000000 KB per GB
     # Timeout on a file download in seconds
     timeout_file_download = 60*5
     timeout_file_processing = 60*10 # 10 minutes
@@ -37,9 +39,9 @@ class config:
     # List genomes from UCSC to download and index
     '''
     example:
-        UCSC_GENOMES = ["hg19", "rn6"]
+        UCSC_GENOMES = ["hg19", "rn6", "petMar2"]
     '''
-    UCSC_GENOMES = ["hg19"]
+    UCSC_GENOMES = ["petMar2"]
 
     # List local genomes to download and index 
     '''
@@ -53,14 +55,14 @@ class config:
                          },
                         ...]
     '''
-    LOCAL_GENOMES = []
-                    #   {
-                    #     "project_name": "fantom5",
-                    #     "reference_genome": "hg19",
-                    #     "metadata_path": "",
-                    #     "data_path": "fantom_sort/"
-                    #     }
-                    # ]
+    LOCAL_GENOMES = [
+                      {
+                        "project_name": "fantom5",
+                        "reference_genome": "hg19",
+                        "metadata_path": "",
+                        "data_path": "fantom_sort/"
+                        }
+                    ]
 
 
     # Metadata file for local directories
@@ -92,7 +94,7 @@ class config:
                 # "CEMT (CEEHRC)",
                 # "CESAR Gene Mappings",
                 # "ChIP-seq data track HUBs from MSC cells from GSE79815",
-                # "Coloc segments",
+                "Coloc segments",
                 # "Cotney Lab Human Craniofacial Epigenomics",
                 # "Cotney Lab Human Embryonic Heart Hub",
                 # "COVID-19 Gene Annotation",
