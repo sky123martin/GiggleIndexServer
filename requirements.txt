@@ -1,5 +1,6 @@
 mysql-connector-python
 pandas
+numpy
 pybedtools
 requests
 alive-progress
@@ -7,5 +8,6 @@ nose2
 unittest2
 pytest-shutil
 subprocess.run
+contextlib2
 ggc
 clize

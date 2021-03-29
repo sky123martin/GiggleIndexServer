@@ -31,6 +31,8 @@ cd ..
 ```
 Create enviorment
 ```
+pip3 install conda
+
 conda install anaconda
 
 conda create -n env python=3

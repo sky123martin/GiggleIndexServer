@@ -11,7 +11,6 @@ from functools import partial
 from alive_progress import alive_bar
 from datetime import date
 import sqlite3
-from shutil import copyfile
 import subprocess
 import re
 import numpy as np
