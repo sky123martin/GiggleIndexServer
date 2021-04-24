@@ -1,4 +1,4 @@
-from setup_indices import cluster_data, connect_SQL_db, extract_bed_columns
+from setup_indices import connect_SQL_db, extract_bed_columns
 from config import config
 from contextlib import contextmanager
 import pandas as pd
@@ -171,52 +171,52 @@ class BasicTests(unittest.TestCase):
     # Indexing Tests #
     ##################
 
-    def test_cluster_data(self):
-        testing_size = config.MAX_INTERVALS_PER_INDEX/2
-        files_info = {"bannana": {
-                    "file_size": testing_size, 
-                    "download_function": "ba", 
-                    "download_params": [1,1,1]
-                    },
-                 "mellon": {
-                    "file_size": testing_size * 1.1, 
-                    "download_function": "", 
-                    "download_params": [2,2,2]
-                    },
+    # def test_cluster_data(self):
+    #     testing_size = config.MAX_INTERVALS_PER_INDEX/2
+    #     files_info = {"bannana": {
+    #                 "file_size": testing_size, 
+    #                 "download_function": "ba", 
+    #                 "download_params": [1,1,1]
+    #                 },
+    #              "mellon": {
+    #                 "file_size": testing_size * 1.1, 
+    #                 "download_function": "", 
+    #                 "download_params": [2,2,2]
+    #                 },
 
-                 "apple": {
-                    "file_size": testing_size, 
-                    "download_function": "", 
-                    "download_params": [3,3,3]
-                }}
-        genome = "fruits"
-        source = "kitchen"
-        clusters = cluster_data(source, genome, files_info)
-        expected_clusters = {source + "_" + genome+"_1": {
-                                "full": True,
-                                "files": {
-                                    "bannana": {
-                                        "file_size": testing_size, 
-                                        "download_function": "ba", 
-                                        "download_params": [1,1,1]
-                                        },
-                                    "mellon": {
-                                        "file_size": testing_size * 1.1, 
-                                        "download_function": "", 
-                                        "download_params": [2,2,2]
-                                    }},
-                                "index_size": testing_size + 1.1*testing_size},
-                             source + "_" + genome+"_2": {
-                                 "full": False,
-                                 "files": {
-                                    "apple": {
-                                        "file_size": testing_size, 
-                                        "download_function": "", 
-                                        "download_params": [3,3,3]
-                                    }},
-                                "index_size": testing_size}
-                          }                     
-        self.assertTrue(expected_clusters == clusters)
+    #              "apple": {
+    #                 "file_size": testing_size, 
+    #                 "download_function": "", 
+    #                 "download_params": [3,3,3]
+    #             }}
+    #     genome = "fruits"
+    #     source = "kitchen"
+    #     clusters = cluster_data(source, genome, files_info)
+    #     expected_clusters = {source + "_" + genome+"_1": {
+    #                             "full": True,
+    #                             "files": {
+    #                                 "bannana": {
+    #                                     "file_size": testing_size, 
+    #                                     "download_function": "ba", 
+    #                                     "download_params": [1,1,1]
+    #                                     },
+    #                                 "mellon": {
+    #                                     "file_size": testing_size * 1.1, 
+    #                                     "download_function": "", 
+    #                                     "download_params": [2,2,2]
+    #                                 }},
+    #                             "index_size": testing_size + 1.1*testing_size},
+    #                          source + "_" + genome+"_2": {
+    #                              "full": False,
+    #                              "files": {
+    #                                 "apple": {
+    #                                     "file_size": testing_size, 
+    #                                     "download_function": "", 
+    #                                     "download_params": [3,3,3]
+    #                                 }},
+    #                             "index_size": testing_size}
+    #                       }                     
+    #     self.assertTrue(expected_clusters == clusters)
 
 
 if __name__ == "__main__":

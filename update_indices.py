@@ -1,202 +1,226 @@
 from config import config
 import pandas as pd
-from setup_indices import local_collect_file_info, UCSC_collect_file_info, cluster_data, setup_indices, local_metadata, UCSC_metadata, UCSC_hubs_metadata, UCSC_collect_hubs
+import subprocess
+from setup_indices import *
 import sqlite3
 import glob
 import os
+import shutil
 
 config = config
 
-def update_UCSC(genome):
-    newly_scraped_files = UCSC_collect_file_info(genome)
-    indexed_files = conn.execute("SELECT NAME, INDEXNAME from FILES WHERE SOURCE = 'UCSC' AND PROJECT = 'UCSC Genomes' AND GENOME = '{}'".format(genome))
-    
-    # Determine if there is an unfull index that could be deleted and recompiled with new files
-    indices_out = conn.execute("SELECT NAME from INDICES WHERE SOURCE = 'UCSC' AND PROJECT = 'UCSC Genomes' AND GENOME = '{}' and FULL = False ".format(genome))
-    
-    open_index = ""
-    for row in indices_out:
-        open_index = row[0]
-    
-    # Determine which files are new
-    num_new_files = len(newly_scraped_files)
-    for row in indexed_files:
-        file_name = row[0]
-        index_name = row[1]
-        if file_name in newly_scraped_files.keys():
-            num_new_files -= 1
-            if index_name != open_index:
-                del newly_scraped_files[file_name]
+def update_ucscGenomes(genomes, conn):
+    print(genomes)
+    # check if project has already been setup, else setup
+    setup_projects = [i[0] for i in conn.execute("select DISTINCT PROJECTID from PROJECTS  where DSOURCE='ucscGenomes'")]
+    config_projects = ["ucscGenomes_" + g.replace(" ","-") for g in genomes]
+    print("HERE", config_projects, setup_projects)
+    for genome in genomes:
+        project_id = "ucscGenomes_" + genome.replace(" ","-")
+        if project_id in setup_projects: # project has already been setup, check for new files
+            # scrap file info for genome
+            scrapped_files = collect_ucsc_files(genome)
+            if isinstance(scrapped_files, str):  # 404 not found on API
+                print("Unable to collect file info from UCSC for {} ref genome".format(genome))
+                continue
+            # collect files that have been indexed
+            setup_files = [i[0] for i in conn.execute("select FILEID from FILES where PROJECTID='{}'".format(project_id))]
+            # scan for new files
+            new_files = {}
+            for f in scrapped_files.keys():
+                if f not in setup_files:
+                    new_files[f] = scrapped_files[f]
+            # if no new files are found then move to next genome
+            if len(new_files) == 0:
+                continue
+            # if new files then find an unfilled index
+            unfull_index_iter = [i[0] for i in conn.execute("select MIN(ITER) from INDICES where PROJECTID='{}' and FULL=0".format(project_id))][0]
+            unfull_files = [i[0] for i in conn.execute("select FILEID from FILES as f left join INDICES as i on f.INDEXID=i.INDEXID where f.PROJECTID='{}' and i.FULL=0".format(project_id))]
+            # create list of files being indexed
+            for f in unfull_files:
+                new_files[f] = scrapped_files[f]
+            # collect metadata for files
+            metadata = UCSC_metadata(genome)
+            # only setup files that have metadata, take intersection of metadata & files_info
+            new_files = {key: new_files[key] for key in list(set(new_files.keys()) & set(metadata['file_name'].to_numpy()))}
+            if len(new_files)==0:
+                continue
+            # delete SQL records for indicies being reindexed
+            conn.execute("DELETE from INDICES where PROJECTID='{}' and FULL=0".format(project_id))
+            conn.execute("DELETE from FILES where INDEXID IN (select INDEXID from INDICES where PROJECTID='{}' and FULL=0)".format(project_id))
+            download_cluster_index(project_id, "ucscGenomes", genome.replace(" ","-"), genome, new_files, metadata, conn, current_index_num=unfull_index_iter)
 
-    if num_new_files > 0:
-        if open_index != "":
-            # delete stored index
-            try:
-                index_list = glob.glob(os.path.join("indices/"+open_index+".d", "*"))
-                for f in index_list :
-                    os.remove(f)
-                os.rmdir("indices/" + open_index + ".d")
-            except OSError:
-                print("folder {} not found".format("indices/"+open_index))
-            # delete current sql db logs of files that are being re-indexing
-            conn.execute("DELETE FROM FILES WHERE INDEXNAME = '{}' AND  SOURCE = 'UCSC' AND PROJECT = 'UCSC Genomes' AND GENOME = '{}'".format(open_index, genome))
-            conn.execute("DELETE FROM INDICES WHERE NAME = '{}' AND  SOURCE = 'UCSC' AND PROJECT = 'UCSC Genomes' AND GENOME = '{}' ".format(open_index, genome))
+        elif project_id not in setup_projects: # project has not been setup
+            setup_ucscGenomes([genome], conn)
 
-        # Re cluster and index files
-        clustered_files_info = cluster_data("local", genome, newly_scraped_files, open_index.split("_")[-1])
-        # collect metadata for files
-        metadata = UCSC_metadata(genome)
+    # if project is no longer in config then delete
+    for setup_id in setup_projects:
+        genome = setup_id.split("_",1)[-1]
+        if setup_id not in config_projects:
+            # delete indices
+            files = [i[0] for i in conn.execute("select INDEXID from INDICES where PROJECTID='{}'".format(setup_id))]
+            for f in files:
+                shutil.rmtree("indices/{}.d".format(f))
 
-        for index, index_info in clustered_files_info.items():
-            # extract files for the index
-            files = list(index_info["files"].keys())
-            # grab metadata pertaining to those files
-            relevant_metadata = metadata[metadata['file_name'].isin(files)]
-            index_metadata = pd.merge(relevant_metadata, 
-                                    pd.DataFrame([[i] for i in files], columns=['file_name']),
-                                    on ="file_name",
-                                    how ="right")
-            index_metadata.fillna("")
-            # setup this index
-            setup_indices("UCSC", "UCSC Genomes", genome, index, index_info, index_metadata, conn)
+            # delete sql metadata
+            conn.execute("DELETE FROM PROJECTS WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM INDICES WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM FILES WHERE PROJECTID = '{}'".format(setup_id))
 
-def update_UCSC_HUBS(project, genome):
-    
-    # collect hub info
-    hubs = requests.get(url = config.UCSC_API + "/list/publicHubs").json()["publicHubs"]
+            # delete genome if there is no other project with that genome
+            cursor = conn.execute("SELECT GENOME from GENOMES WHERE GENOMES.GENOME = '{}' LIMIT 1".format(genome))
+            df = pd.DataFrame(cursor.fetchall())
+            if df.empty:
+                conn.execute("DELETE FROM GENOMES WHERE GENOME = '{}'".format(genome))
+
+def update_ucscHubs(hub_names, conn):
+    # check if project has already been setup, else setup
+    setup_projects = [i[0] for i in conn.execute("select DISTINCT PROJECTID from PROJECTS where DSOURCE='ucscHubs'")]
+    config_projects = []
+    print(hub_names, setup_projects)
+    hubs = collect_ucscHubs(hub_names)
     for hub in hubs:
-        if hub["shortLabel"] == project:
-            break
+        for genome in hub["genomes"]:
+            project_id = "ucscHubs_{}_{}".format(hub["hub_short_label"].replace(" ","-").replace("_","-"), genome)
+            print(project_id)
+            config_projects.append(project_id)
+            if genome == "":
+                continue
+            # add geno
+            if project_id in setup_projects: # project has already been setup, check for new files
+                # scrap file info for genome
+                scrapped_files = collect_ucsc_files(genome, HUB_EXT="hubUrl={};".format(hub["hub_url"]))
+                if isinstance(scrapped_files, str):  # 404 not found on API
+                    print("Unable to collect file info from ucscHub {}".format(project_id))
+                    continue
+                # collect files that have been indexed
+                setup_files = [i[0] for i in conn.execute("select FILEID from FILES where PROJECTID='{}'".format(project_id))]
+                # scan for new files
+                new_files = {}
+                for f in scrapped_files.keys():
+                    if f not in setup_files:
+                        new_files[f] = scrapped_files[f]
+                # if no new files are found then move to next genome
+                if len(new_files) == 0:
+                    print("no files")
+                    continue
+                # if new files then find an unfilled index
+                unfull_index_iter = [i[0] for i in conn.execute("select MIN(ITER) from INDICES where PROJECTID='{}' and FULL=0".format(project_id))][0]
+                unfull_files = [i[0] for i in conn.execute("select FILEID from FILES as f left join INDICES as i on f.INDEXID=i.INDEXID where f.PROJECTID='{}' and i.FULL=0".format(project_id))]
+                # delete SQL records for indicies being reindexed
+                conn.execute("DELETE from INDICES where PROJECTID='{}' and FULL=0".format(project_id))
+                conn.execute("DELETE from FILES where INDEXID IN (select INDEXID from INDICES where PROJECTID='{}' and FULL=0)".format(project_id))
+                # create list of files being indexed
+                for f in unfull_files:
+                    new_files[f] = scrapped_files[f]
+                print("HERE", new_files)
 
-    indexed_files = conn.execute("SELECT NAME, INDEXNAME from FILES WHERE SOURCE = 'UCSC' AND PROJECT = '{}' AND GENOME = '{}'".format(project, genome))
-    
-    # Determine if there is an unfull index that could be deleted and recompiled with new files
-    indices_out = conn.execute("SELECT NAME, HUBEXT from INDICES WHERE SOURCE = 'UCSC' AND PROJECT = '{}' AND GENOME = '{}' AND FULL = False ".format(project, genome))
-    
-    open_index = ""
-    for row in indices_out:
-        open_index = row[0]
-    
-    newly_scraped_files = UCSC_collect_file_info(genome, "hubUrl={};".format(hub_ext)
+                # collect metadata for files
+                metadata = UCSC_hubs_metadata(hub, genome)
 
-    # Determine which files are new
-    num_new_files = len(newly_scraped_files)
-    for row in indexed_files:
-        file_name = row[0]
-        index_name = row[1]
-        if file_name in newly_scraped_files.keys():
-            num_new_files -= 1
-            if index_name != open_index:
-                del newly_scraped_files[file_name]
+                download_cluster_index(project_id, "ucscHubs", hub["hub_short_label"], genome, new_files, metadata, conn)
 
-    if num_new_files > 0:
-        if open_index != "":
-            # delete stored index
-            try:
-                index_list = glob.glob(os.path.join("indices/"+open_index+".d", "*"))
-                for f in index_list:
-                    os.remove(f)
-                os.rmdir("indices/" + open_index + ".d")
-            except OSError:
-                print("folder {} not found".format("indices/"+open_index))
-            # delete current sql db logs of files that are being re-indexing
-            conn.execute("DELETE FROM FILES WHERE INDEXNAME = '{}' AND SOURCE = 'UCSC' AND PROJECT = '{}' AND GENOME = '{}'".format(open_index, project, genome))
-            conn.execute("DELETE FROM INDICES WHERE NAME = '{}' AND SOURCE = 'UCSC' AND PROJECT = '{}' AND GENOME = '{}'".format(open_index, project, genome))
+            elif project_id not in setup_projects: # project has not been setup
+                print("NEW INDEX")
+                setup_ucscHubs([hub["hub_short_label"]], conn)
+                break
 
-            # cluster files based on hyperparam in .config
-            clustered_files_info = cluster_data(hub["hub_short_label"].replace(" ",""), genome, files_info)
-            # iterate through each cluster then download and index cluster files
-            metadata = UCSC_hubs_metadata(hub, genome)
+    # if project is no longer in config then delete
+    for setup_id in setup_projects:
+        genome = setup_id.split("_",1)[-1]
+        if setup_id not in config_projects:
+            # delete indices
+            files = [i[0] for i in conn.execute("select INDEXID from INDICES where PROJECTID='{}'".format(setup_id))]
+            for f in files:
+                shutil.rmtree("indices/{}.d".format(f))
 
-            for index, index_info in clustered_files_info.items():
-                # extract files for the index
-                files = list(index_info["files"].keys())
-                # grab metadata pertaining to those files
-                relevant_metadata = metadata[metadata['file_name'].isin(files)]
-                index_metadata = pd.merge(relevant_metadata, 
-                                        pd.DataFrame([[i] for i in files], columns=['file_name']),
-                                        on ="file_name",
-                                        how ="right")
-                index_metadata.fillna("")
-                setup_indices("UCSC", hub["hub_short_label"], genome, index, index_info, metadata, conn)
+            # delete sql metadata
+            conn.execute("DELETE FROM PROJECTS WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM INDICES WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM FILES WHERE PROJECTID = '{}'".format(setup_id))
 
-
-def update_LOCAL(project_name, genome):
-    for project in config.LOCAL_GENOMES:
-        if project["project_name"] == project_name:
-            break
-    files_info = local_collect_file_info(project["data_path"])
-    files_out = conn.execute("SELECT NAME, INDEXNAME from FILES WHERE SOURCE = 'LOCAL' AND PROJECT = '{}' AND GENOME = '{}'".format(project, genome))
-    
-    # Determine if there is an unfull index that could be deleted and recompiled with new files
-    indices_out = conn.execute("SELECT NAME from INDICES WHERE SOURCE = 'LOCAL' AND PROJECT = '{}' AND GENOME = '{}' AND FULL = False ".format(project, genome))
-    
-    open_index = ""
-    for row in indices_out:
-        open_index = row[0]
-    
-    # Determine which files are new
-    num_new_files = len(files_info)
-    for row in files_out:
-        file_name = row[0]
-        index_name = row[1]
-        if file_name in files_info.keys():
-            num_new_files -= 1
-            if index_name != open_index:
-                del files_info[file_name]
-
-    if num_new_files > 0:
-        if open_index != "":
-            # delete stored index
-            try:
-                index_list = glob.glob(os.path.join("indices/"+open_index+".d", "*"))
-                for f in index_list :
-                    os.remove(f)
-                os.rmdir("indices/"+open_index+".d")
-            except OSError:
-                print("folder {} not found".format("indices/"+open_index))
-            # delete current sql db logs of files that are being re-indexing
-            conn.execute("DELETE FROM FILES WHERE INDEXNAME = '{}' AND SOURCE = 'LOCAL' AND PROJECT = '{}' AND GENOME = '{}'".format(open_index, project, genome))
-            conn.execute("DELETE FROM INDICES WHERE NAME = '{}' AND SOURCE = 'LOCAL' AND PROJECT = '{}' AND GENOME = '{}'".format(open_index, project, genome))
-
-        # Re cluster and index files
-        # collect metadata for files
-        metadata = local_metadata(project["metadata_path"])
-        # cluster files based on hyperparam in .config
-        clustered_files_info = cluster_data(project["project_name"], project["reference_genome"], files_info, open_index.split("_")[-1])
-        # iterate through each cluster then download and index cluster files
-
-        for index, index_info in clustered_files_info.items():
-            files = list(index_info["files"].keys())
-            index_metadata = pd.merge(metadata, 
-                                    pd.DataFrame([[i] for i in files], columns = ['file_name']),
-                                    on = "file_name",
-                                    how = "right")
-            index_metadata.fillna("")
-            
-            setup_indices("LOCAL", project["project_name"], project["reference_genome"], index, index_info, index_metadata, conn)
+            # delete genome if there is no other project with that genome
+            cursor = conn.execute("SELECT GENOME from GENOMES WHERE GENOMES.GENOME = '{}' LIMIT 1".format(genome))
+            df = pd.DataFrame(cursor.fetchall())
+            if df.empty:
+                conn.execute("DELETE FROM GENOMES WHERE GENOME = '{}'".format(genome))
 
 
-def update(source, project, genome):
-    if source == "UCSC" and project == "UCSC Genomes": # UCSC Genome
-        update_UCSC(genome)
-    elif source == "UCSC" and project != "UCSC Genomes": # UCSC hub
-        update_UCSC_HUBS(project, genome)
-    elif source == "local": # local project
-        update_LOCAL(genome)
-    else:
-        print("No compatible update function {}, {}, {}".format(source, project, genome))
+def update_local(projects, conn):
+    # check if project has already been setup, else setup
+    setup_projects = [i[0] for i in conn.execute("select DISTINCT PROJECTID from PROJECTS where DSOURCE='local'")]
+    config_projects = ["local_{}_{}".format(p["project_name"].replace(" ","-"), p["reference_genome"].replace(" ","-")) for p in projects]
+
+    for project in projects:
+        project_id = "local_{}_{}".format(project["project_name"].replace(" ","-"), project["reference_genome"].replace(" ","-"))
+        if project_id in setup_projects: # project has already been setup, check for new files
+            # scrap file info for genome
+            scrapped_files = local_collect_file_info(project["data_path"])
+            if isinstance(scrapped_files, str):  # 404 not found on API
+                print("Unable to collect file info from local for {} project".format(project["project_name"]))
+                continue
+            # collect files that have been indexed
+            setup_files = [i[0] for i in conn.execute("select FILEID from FILES where PROJECTID='{}'".format(project_id))]
+            # scan for new files
+            new_files = {}
+            for f in scrapped_files.keys():
+                if f not in setup_files:
+                    new_files[f] = scrapped_files[f]
+            # if no new files are found then move to next genome
+            if len(new_files) == 0:
+                continue
+            # if new files then find an unfilled index
+            unfull_index_iter = [i[0] for i in conn.execute("select MIN(ITER) from INDICES where PROJECTID='{}' and FULL=0".format(project_id))][0]
+            unfull_files = [i[0] for i in conn.execute("select FILEID from FILES as f left join INDICES as i on f.INDEXID=i.INDEXID where f.PROJECTID='{}' and i.FULL=0".format(project_id))]
+            # create list of files being indexed
+            for f in unfull_files:
+                new_files[f] = scrapped_files[f]
+            # collect metadata for files
+            metadata = UCSC_metadata(genome)
+            # only setup files that have metadata, take intersection of metadata & files_info
+            new_files = {key: new_files[key] for key in list(set(new_files.keys()) & set(metadata['file_name'].to_numpy()))}
+            if len(new_files)==0:
+                continue
+            # delete SQL records for indicies being reindexed
+            conn.execute("DELETE from INDICES where PROJECTID='{}' and FULL=0".format(project_id))
+            conn.execute("DELETE from FILES where INDEXID IN (select INDEXID from INDICES where PROJECTID='{}' and FULL=0)".format(project_id))
+            download_cluster_index(project_id, "local", project["project_name"], project["reference_genome"], new_files, metadata, conn, current_index_num=unfull_index_iter)
+
+        elif project_id not in setup_projects: # project has not been setup
+            setup_local([project], conn)
+
+    # if project is no longer in config then delete
+    for setup_id in setup_projects:
+        genome = setup_id.split("_",1)[-1]
+        if setup_id not in config_projects:
+            # delete indices
+            files = [i[0] for i in conn.execute("select INDEXID from INDICES where PROJECTID='{}'".format(setup_id))]
+            for f in files:
+                shutil.rmtree("indices/{}.d".format(f))
+
+            # delete sql metadata
+            conn.execute("DELETE FROM PROJECTS WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM INDICES WHERE PROJECTID = '{}'".format(setup_id))
+            conn.execute("DELETE FROM FILES WHERE PROJECTID = '{}'".format(setup_id))
+
+            # delete genome if there is no other project with that genome
+            cursor = conn.execute("SELECT GENOME from GENOMES WHERE GENOMES.GENOME = '{}' LIMIT 1".format(genome))
+            df = pd.DataFrame(cursor.fetchall())
+            if df.empty:
+                conn.execute("DELETE FROM GENOMES WHERE GENOME = '{}'".format(genome))
 
 
 if __name__ == "__main__":
-    global conn
     conn = sqlite3.connect(config.DB)
-    out = conn.execute("SELECT DISTINCT SOURCE, PROJECT, GENOME from FILES")
-    for row in out:
-        source = row[0]
-        project = row[1]
-        genome = row[2]
-        update(source, project, genome)
 
-        conn.commit()
+    update_ucscGenomes(config.UCSC_GENOMES, conn)
+    update_ucscHubs(config.UCSC_HUBS[:-1], conn)
+    update_local(config.LOCAL_GENOMES, conn)
+
+    # delete any projects that are maintained but no longer listed in the config
+    conn.commit()
     conn.close()
+
+    proc = subprocess.check_output("python3 query_indices.py -g outputs/genomes.csv",
+                                    stderr=None,
+                                    shell=True)

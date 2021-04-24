@@ -29,9 +29,15 @@ class config:
 
     # Number of proccesses available to server
     AVAILABLE_PROCCESSES = 12
+    
+    # Max file size (intervals)
+    max_file_size_MB = 5
+    max_file_size = max_file_size_MB*1000*155 # conversion: ~155 intervals per KB, 1000 KB per MB
 
     # Max file size for setup (intervals)
-    max_setup_file_size = 100000*155 # conversion: ~155 intervals per KB, 1000000 KB per GB
+    max_setup_file_size_MB = 1
+    max_setup_file_size = max_setup_file_size_MB*1000*155 # conversion: ~155 intervals per KB, 1000 KB per MB
+
     # Timeout on a file download in seconds
     timeout_file_download = 60*5
     timeout_file_processing = 60*10 # 10 minutes
@@ -41,7 +47,7 @@ class config:
     example:
         UCSC_GENOMES = ["hg19", "rn6", "petMar2"]
     '''
-    UCSC_GENOMES = ["petMar2"]
+    UCSC_GENOMES = ["rn6"]
 
     # List local genomes to download and index 
     '''
@@ -56,12 +62,12 @@ class config:
                         ...]
     '''
     LOCAL_GENOMES = [
-                      {
-                        "project_name": "fantom5",
-                        "reference_genome": "hg19",
-                        "metadata_path": "",
-                        "data_path": "fantom_sort/"
-                        }
+                    #   {
+                    #     "project_name": "fantom5",
+                    #     "reference_genome": "hg19",
+                    #     "metadata_path": "",
+                    #     "data_path": "fantom_sort/"
+                    #     }
                     ]
 
 
@@ -94,7 +100,7 @@ class config:
                 # "CEMT (CEEHRC)",
                 # "CESAR Gene Mappings",
                 # "ChIP-seq data track HUBs from MSC cells from GSE79815",
-                "Coloc segments",
+                # "Coloc segments",
                 # "Cotney Lab Human Craniofacial Epigenomics",
                 # "Cotney Lab Human Embryonic Heart Hub",
                 # "COVID-19 Gene Annotation",

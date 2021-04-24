@@ -200,7 +200,7 @@ Download relavent data into GiggleIndexServer/ directory
 ```
 cd GiggleIndexServer
 
-curl https://s3.amazonaws.com/layerlab/giggle/fantom/fantom_sort.tar.gz
+curl https://s3.amazonaws.com/layerlab/giggle/fantom/fantom_sort.tar.gz --output fantom_sort.tar.gz
 
 gzip -d < fantom_sort.tar.gz | tar xvf -
 

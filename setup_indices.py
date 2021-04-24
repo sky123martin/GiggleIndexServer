@@ -16,6 +16,7 @@ import re
 import numpy as np
 from math import isnan
 import math
+import shutil
 
 
 config = config
@@ -87,8 +88,7 @@ def extract_bed_columns(columns, file_type):
 
     # if accurate column values not found
     if chrom == "" or chrom_start == "" or chrom_end == "" or base_shift == "":
-        print("Given file columns does not have a conversion to .bed for file type {}".format(file_type))
-        print(columns)
+        print("Given file columns, {}, does not have a conversion to .bed for file type {}".format(columns, file_type))
         return "bed mapping not found"
 
     return {chrom: "chrom", chrom_start: "start", chrom_end: "end"}, base_shift
@@ -98,8 +98,6 @@ def file_download_handler(path, file_info):
         file_info["download_function"](path, file_info["download_params"])
     except Exception as e:
         print(e)
-        print("download error", file_info)
-
 
 def download_all_files(folder, files_info):
     proc = subprocess.check_output("mkdir -p data/{}".format(folder), shell=True)
@@ -109,100 +107,109 @@ def download_all_files(folder, files_info):
 
 def giggle_sort(path):
     sorted_path = path + "_sorted"
+    temp_path = path + "_temp"
 
     # make sorted directory
-    cmd_str = "mkdir -p {}".format(sorted_path)
-    proc = subprocess.check_output(cmd_str,
+    os.makedirs(sorted_path, exist_ok=True)
+
+    # split into 500 files groups and then sort bed
+    batch_size = 500
+    file_list = os.listdir(path)
+    while len(file_list) > batch_size:
+        os.makedirs(temp_path, exist_ok=True)
+        # sort batch of files
+        for f in file_list[:batch_size]:
+            shutil.move(path+"/"+f, temp_path)
+        cmd_str = 'giggle/scripts/sort_bed \"{}/*.bed*\" {} {}'.format(temp_path, sorted_path, config.AVAILABLE_PROCCESSES)
+        proc = subprocess.check_output(cmd_str,
                                     shell=True,
-                                    timeout=config.timeout_file_processing)
-    # sort files using giggle sort
+                                    timeout=2*60)
+        proc = subprocess.check_output("rm -R -f {}".format(temp_path), shell=True)
+        proc = subprocess.check_output("mkdir -p {}".format(temp_path), shell=True, timeout=config.timeout_file_processing)
+        # remove unsorted files from queue
+        file_list = file_list[batch_size:]
+
+    # sort remaining files using giggle sort
     cmd_str = 'giggle/scripts/sort_bed \"{}/*.bed*\" {} {}'.format(path, sorted_path, config.AVAILABLE_PROCCESSES)
+    print(cmd_str)
     proc = subprocess.check_output(cmd_str,
                                     shell=True,
                                     timeout=2*60)
     
     proc = subprocess.check_output("rm -R -f {}".format(path), shell=True)
-
+    proc = subprocess.check_output("rm -R -f {}".format(temp_path), shell=True)
 
 def giggle_move_index(path, params):
-    index_name = params[0]
-    files = params[1]
-    
-    index_path = "data/{}".format(index_name)
-    proc = subprocess.check_output("mkdir -p {}".format(index_path), shell=True)
-    
-    for f in files:
-        proc = subprocess.check_output("mv {}/{}.bed.gz {}/".format(path, f, index_path), shell=True)
+    try:
+        index_name = params[0]
+        files = params[1]
+        print("Making indices")
+        index_path = "data/{}".format(index_name)
+        os.makedirs(index_path, exist_ok=True)
 
-    cmd_str = 'giggle index -i \"{}/*.bed.gz\" -o indices/{}.d  -f -s'.format(index_path, index_name)
-    proc = subprocess.check_output(cmd_str, timeout=config.timeout_file_processing, shell=True)
+        for f in files:
+            proc = subprocess.check_output("mv {}/{}.bed.gz {}/".format(path, f, index_path), shell=True)
 
-    #proc = subprocess.check_output("rm -R -f {}".format(index_path), shell=True)
-            
+        cmd_str = 'giggle index -i \"{}/*.bed.gz\" -o indices/{}.d  -f -s'.format(index_path, index_name)
+        print(cmd_str)
+        proc = subprocess.check_output(cmd_str, timeout=config.timeout_file_processing, shell=True)
 
-def download_cluster_index(source, project, genome, files_info, metadata, conn, current_index_num=1):
+        proc = subprocess.check_output("rm -R -f {}".format(index_path), shell=True)
+        proc = subprocess.check_output("rm -R -f {}/".format(path), shell=True)
+    except Exception as e:
+        print(e)
+        return "error"    
+
+def download_cluster_index(index_base, source, project, genome, files_info, metadata, conn, current_index_num=1):
     # download all files
-    all_files_folder = "{}_{}_{}".format(source, project, genome)
+    all_files_folder = index_base
     download_all_files(all_files_folder, files_info)
     files_downloaded = os.listdir("data/" + all_files_folder)
 
     # sort all files
-    giggle_sort("data/{}".format(all_files_folder))
-    all_files_folder = "data/{}_sorted".format(all_files_folder)
-    files_downloaded = [i.replace(".bed.gz", "") for i in os.listdir(all_files_folder)]
-    
-    metadata = metadata[metadata["file_name"].isin(files_downloaded)]
-    metadata = pd.merge(metadata, 
-                        pd.DataFrame([[i] for i in files_downloaded], columns=['file_name']),
-                        on ="file_name",
-                        how ="right")
-    metadata["file_size"] = metadata["file_name"].apply(lambda n: files_info[n]["file_size"] if n in files_info.keys() else 0)
+    if len(files_downloaded) > 0:
+        giggle_sort("data/{}".format(all_files_folder))
+        all_files_folder = "data/{}_sorted".format(all_files_folder)
+        files_downloaded = [i.replace(".bed.gz", "") for i in os.listdir(all_files_folder)]
+        
+        metadata = metadata[metadata["file_name"].isin(files_downloaded)]
+        metadata = pd.merge(metadata, 
+                            pd.DataFrame([[i] for i in files_downloaded], columns=['file_name']),
+                            on ="file_name",
+                            how ="right")
+        metadata["file_size"] = metadata["file_name"].apply(lambda n: files_info[n]["file_size"] if n in files_info.keys() else 0)
 
-    indices = []
-    print(metadata)
-    while metadata.shape[0] > 0:
-        current_index_name = "{}_{}_{}_{}".format(source, project, genome, current_index_num)
-        current_index_size = 0
-        current_index_files = []
-        for index, row in metadata.iterrows():
-            current_index_size = current_index_size + row["file_size"]
-            current_index_files.append(row["file_name"])
-            metadata.drop([index], inplace=True)
-            # insert file into DB
-            conn.execute("INSERT INTO FILES (NAME, DATE, SOURCE, PROJECT, GENOME, SIZE, INDEXNAME, SHORTNAME, LONGNAME, SHORTINFO, LONGINFO) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (row["file_name"], date.today(), source, project, genome, row["file_size"], current_index_name, row["short_name"], row["long_name"], str(row["short_info"]), str(row["long_info"]),))
-            
-            if current_index_size > config.MAX_INTERVALS_PER_INDEX:
-                current_index_full = True
-                break
-        current_index_num = current_index_num + 1
-        indices.append([current_index_name, current_index_files])
+        indices = []
+        while metadata.shape[0] > 0:
+            current_index_name = "{}_{}".format(index_base, current_index_num)
+            current_index_size = 0
+            current_index_full = False
+            current_index_files = []
+            for index, row in metadata.iterrows():
+                current_index_size = current_index_size + row["file_size"]
+                current_index_files.append(row["file_name"])
+                metadata.drop([index], inplace=True)
+                # insert file into DB
+                conn.execute("INSERT INTO FILES (FILEID, SIZE, GENOME, PROJECTID, INDEXID, SHORTNAME, LONGNAME, SHORTINFO, LONGINFO) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (row["file_name"], row["file_size"], genome, index_base, current_index_name, row["short_name"], row["long_name"], str(row["short_info"]), str(row["long_info"]),))
+                
+                if current_index_size > config.MAX_INTERVALS_PER_INDEX:
+                    current_index_full = True
+                    break
+            current_index_num = current_index_num + 1
+            indices.append([current_index_name, current_index_files])
 
-        conn.execute("INSERT INTO INDICES (NAME, ITER, DATE, SOURCE, PROJECT, GENOME, FULL, SIZE) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
-            (current_index_name, current_index_name.split("_")[-1], date.today(), source, project, genome, (current_index_size > config.MAX_INTERVALS_PER_INDEX), current_index_size,))
+            conn.execute("INSERT INTO INDICES (INDEXID, ITER, DATE, DSOURCE, PROJECTID, GENOME, FULL, SIZE) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                (current_index_name, int(current_index_name.split("_")[-1]), date.today(), source, index_base, genome, (current_index_full), current_index_size,))
 
-    with Pool(config.AVAILABLE_PROCCESSES) as p:  # to check multiprocessing.cpu_count()
-        output = p.map(partial(giggle_move_index, all_files_folder), indices)
+        with Pool(config.AVAILABLE_PROCCESSES) as p:  # to check multiprocessing.cpu_count()
+            output = p.map(partial(giggle_move_index, all_files_folder), indices)
 
 #########################
 # UCSC GENOME FUNCTIONS #
 #########################
 
-def setup_UCSC_GENOMES(genomes, conn):
-    for genome in genomes:
-        # collect file information
-        files_info = UCSC_file_info(genome, max_file_size = config.max_setup_file_size)
-        if isinstance(files_info, str):  # 404 not found on API
-            print("Unable to collect file info from UCSC for {} ref genome".format(genome))
-            continue
-        # collect metadata for files
-        metadata = UCSC_metadata(genome)
-        # only setup files that have metadata, take intersection of metadata & files_info
-        files_info = {key: files_info[key] for key in list(set(files_info.keys()) & set(metadata['file_name'].to_numpy()))}
-
-        download_cluster_index("UCSC", "USCSgenomes", genome, files_info, metadata, conn)
-
-def UCSC_file_info(genome, max_file_size = math.inf, HUB_EXT = ""):
+def collect_ucsc_files(genome, max_file_size = config.max_file_size, HUB_EXT = ""):
     """ uses UCSC API to gather download info for each track in a specific genome
     Parameters
     ----------
@@ -300,24 +307,56 @@ def download_linked_file(path, params):
     """
 
     try:
-        if "bb" == params["file_type"]:
-            cmd_str  = "UCSC_utilities/bigBedToBed {} data/{}/{}.bed".format(params["download_location"], path, params["track"])
-            subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
-        elif "bw" == params["file_type"]:
-            cmd_str  = "UCSC_utilities/bigWigToBedGraph {} data/{}/{}.bed".format(params["download_location"], path, params["track"])
-            subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
-        elif "bigPsl" == params["file_type"]:
-            cmd_str = "UCSC_utilities/bigPslToPsl {} data/{}/{}.psl".format(params["download_location"], path, params["track"])
-            subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
-            cmd_str = "UCSC_utilities/pslToBed data/{}/{}.psl data/{}/{}.bed".format(path, params["track"], path, params["track"])
-            subprocess.check_output(cmd_str, shell=True)
-            os.remove("data/{}/{}.psl".format(path, params["track"]))
-        elif "bed" == params["file_type"]:
-            cmd_str = "cp {} data/{}/{}.bed".format(params["download_location"], path, params["track"])
-            proc = subprocess.check_output(cmd_str, shell=True, timeout=config.timeout_file_download)
-        
+        # download file from
+        if 'local' in path:
+            shutil.copyfile(params["download_location"], "data/{}/{}.{}".format(path, params["track"], params["file_type"]))
         else:
-            print("File {} of type not able to be converted".format(params["track"], params["file_type"]))
+            cmd_str = "curl {} --output data/{}/{}.{}".format(params["download_location"], path, params["track"], params["file_type"])
+            subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
+        params["download_location"] = "data/{}/{}.{}".format(path, params["track"], params["file_type"])
+
+        try:
+            if "bb" == params["file_type"]:
+                cmd_str  = "UCSC_utilities/bigBedToBed {} data/{}/{}.bed".format(params["download_location"], path, params["track"])
+                subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
+                os.remove(params["download_location"])
+            elif "bw" == params["file_type"]:
+                cmd_str  = "UCSC_utilities/bigWigToBedGraph {} data/{}/{}.bed".format(params["download_location"], path, params["track"])
+                subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
+                os.remove(params["download_location"])
+            elif "bigPsl" == params["file_type"]:
+                cmd_str = "UCSC_utilities/bigPslToPsl {} data/{}/{}.psl".format(params["download_location"], path, params["track"])
+                subprocess.check_output(cmd_str, shell=True, timeout = config.timeout_file_download)
+                cmd_str = "UCSC_utilities/pslToBed data/{}/{}.psl data/{}/{}.bed".format(path, params["track"], path, params["track"])
+                subprocess.check_output(cmd_str, shell=True)
+                os.remove(params["download_location"])
+                os.remove("data/{}/{}.psl".format(path, params["track"]))
+            elif "bed" == params["file_type"]:
+                pass
+            else:
+                print("File {} of type not able to be converted".format(params["track"], params["file_type"]))
+
+        except Exception as e:
+            # some files are labeled as .bb but store html with an alternate url
+            if int(subprocess.check_output("wc -l {}".format(params["download_location"]), shell=True, text=True).split()[0]) < 15:
+                f = open(params["download_location"], "r")
+                url_found = False
+                for l in f:
+                    if "https://" in l and params["file_type"] in l:
+                        print("LINE", l )
+                        start = l.find("https://")
+                        stop = l.find(params["file_type"])
+                        if start != -1 and stop !=-1:
+                            url_found = True
+                            url = l[start:stop+len(params["file_type"])]
+                            params["download_location"] = url
+                            download_linked_file(path, params)
+                            break
+                if not url_found:
+                    os.remove(params["download_location"])
+
+            else:
+                os.remove(params["download_location"])
     except Exception as e:
         print("Exception thrown for track", params["track"], e)
 
@@ -352,21 +391,64 @@ def HTML_extract_description(html):
 ######################
 # UCSC HUB FUNCTIONS #
 ######################
+def add_genome(genome, science_name, common_name, description, conn):
+    # add genome if it has yet to be added
+    cursor = conn.execute("SELECT GENOME from GENOMES WHERE GENOMES.GENOME = '{}'".format(genome))
+    df = pd.DataFrame(cursor.fetchall())
+    if df.empty:
+        conn.execute("INSERT INTO GENOMES (GENOME, SCINAME, COMMONNAME, DESCRIPTION) VALUES (?, ?, ?, ?)", (genome, science_name, common_name, description,))
 
-def setup_UCSC_HUBS(hub_names, conn):
-    hubs = UCSC_collect_hubs(hub_names)
+
+def setup_ucscGenomes(genomes, conn):
+    url = "{}/list/ucscGenomes".format(config.UCSC_API)
+    genome_info = requests.get(url = url).json()["ucscGenomes"]
+    for genome in genomes:
+        # add genome to GENOMES
+        add_genome(genome, genome_info[genome]["scientificName"], genome_info[genome]["organism"], genome_info[genome]["description"], conn)
+
+        # add UCSC genome info to PROJECTS
+        project_id = "ucscGenomes_" + genome.replace(" ","-")
+        conn.execute("INSERT INTO PROJECTS (PROJECTID, OSOURCE,  DSOURCE, SHORTNAME, LONGNAME, INFO) VALUES (?, ?, ?, ?, ?, ?)", 
+                (project_id, genome_info[genome]["sourceName"], "ucscGenomes", genome, genome_info[genome]["description"], genome_info[genome]["htmlPath"],))
+        # collect file information
+        files_info = collect_ucsc_files(genome, max_file_size = config.max_setup_file_size)
+        if isinstance(files_info, str):  # 404 not found on API
+            print("Unable to collect file info from UCSC for {} ref genome".format(genome))
+            continue
+        # collect metadata for files
+        metadata = UCSC_metadata(genome)
+        # only setup files that have metadata, take intersection of metadata & files_info
+        files_info = {key: files_info[key] for key in list(set(files_info.keys()) & set(metadata['file_name'].to_numpy()))}
+        
+        download_cluster_index(project_id, "ucscGenomes", genome.replace(" ","-"), genome, files_info, metadata, conn)
+
+def setup_ucscHubs(hub_names, conn):
+    hubs = collect_ucscHubs(hub_names)
     for hub in hubs:
+        url = "{}/list/hubGenomes?hubUrl={}".format(config.UCSC_API, hub["hub_url"])
+        hub_genomes = requests.get(url = url).json()["genomes"]
         for genome in hub["genomes"]:
+            if genome not in hub_genomes.keys():
+                continue
+            # add genome to GENOMES
+            scientific_name = hub_genomes[genome]["scientificName"] if "scientificName" in hub_genomes[genome].keys() else ""
+            organism = hub_genomes[genome]["organism"] if "organism" in hub_genomes[genome].keys() else ""
+            description = hub_genomes[genome]["description"] if "description" in hub_genomes[genome].keys() else ""
+            add_genome(genome, scientific_name, organism, description, conn)
+
+            # add hub info to PROJECTS
+            project_id = "ucscHubs_{}_{}".format(hub["hub_short_label"].replace(" ","-").replace("_","-"), genome)
+            conn.execute("INSERT INTO PROJECTS (PROJECTID, OSOURCE,  DSOURCE, SHORTNAME, LONGNAME, INFO) VALUES (?, ?, ?, ?, ?, ?)", 
+                (project_id, hub["hub_url"], "ucscHubs", hub["hub_short_label"], hub["hub_long_label"], hub["descriptionUrl"],))
             # collect file information
-            files_info = UCSC_file_info(genome, max_file_size = config.max_setup_file_size, HUB_EXT="hubUrl={};".format(hub["hub_url"]))
+            files_info = collect_ucsc_files(genome, max_file_size = config.max_setup_file_size, HUB_EXT="hubUrl={};".format(hub["hub_url"]))
             if isinstance(files_info, str):
                 continue
             # iterate through each cluster then download and index cluster files
             metadata = UCSC_hubs_metadata(hub, genome)
+            download_cluster_index(project_id, "ucscHubs", hub["hub_short_label"], genome, files_info, metadata, conn)
 
-            download_cluster_index("UCSC", hub["hub_short_label"].replace(" ","-"), genome, files_info, metadata, conn)
-
-def UCSC_collect_hubs(hub_names):
+def collect_ucscHubs(hub_names):
     hubs = requests.get(url = config.UCSC_API + "/list/publicHubs").json()["publicHubs"]
     hubs_info = []
     for hub in hubs:
@@ -408,16 +490,22 @@ def UCSC_hubs_metadata(hub, genome):
 # LOCAL GENOME FUNCTIONS #
 ##########################
 
-def setup_LOCAL(projects, conn):
+def setup_local(projects, conn):
     for project in projects: #genome, paths in genomes.items():
+        # add genome to GENOMES
+        add_genome(project["reference_genome"], "", "", "", conn)
+        # add UCSC genome info to PROJECTS
+        project_id = "local_{}_{}".format(project["project_name"].replace(" ","-"), project["reference_genome"].replace(" ","-"))
+        conn.execute("INSERT INTO PROJECTS (PROJECTID, OSOURCE,  DSOURCE, SHORTNAME, LONGNAME, INFO) VALUES (?, ?, ?, ?, ?, ?)", 
+                (project_id, project["reference_genome"], "local", "", "","",))
         # collect file information
-        files_info = local_collect_file_info(project["data_path"])
+        files_info = local_collect_file_info(project["data_path"], max_file_size=config.max_setup_file_size)
         # collect metadata for files
         metadata = local_metadata(project["metadata_path"])
         # download files, cluster, then index
-        download_cluster_index("LOCAL", project["project_name"], project["reference_genome"], files_info, metadata, conn)
+        download_cluster_index(project_id, "local", project["project_name"], project["reference_genome"], files_info, metadata, conn)
 
-def local_collect_file_info(path):
+def local_collect_file_info(path, max_file_size=config.max_file_size):
     file_list = glob.glob(os.path.join(path, "*.bed*"))
     files_info = {}
     for file_name in file_list:
@@ -428,7 +516,7 @@ def local_collect_file_info(path):
         # count number of intervals per file
         interval_count = int(subprocess.check_output("wc -l {}/{}".format(path, file_name), shell=True, text=True).split()[0])
         # store file info
-        if interval_count < config.max_setup_file_size:
+        if interval_count < max_file_size:
             files_info[track_name] = {"file_size": interval_count,
                                       "download_function": download_linked_file,
                                       "download_params": {"track": track_name, 
@@ -467,19 +555,29 @@ def local_metadata(path):
 
 
 if __name__ == "__main__":
-    proc = subprocess.check_output("rm -f -r data", shell=True)
-    proc = subprocess.check_output("rm -f -r indices", shell=True)
+    if os.path.exists("data"):
+        shutil.rmtree("data")
+    if os.path.exists("indices"):
+        shutil.rmtree("indices")
+    if os.path.exists("outputs"):
+        shutil.rmtree("outputs")
+    if os.path.exists("Indexing.db"):
+        os.remove("Indexing.db")
     os.system('python3 models.py')  # setup indexing and files database
     conn = sqlite3.connect('Indexing.db')  # make connection to database
     
     # make directories for data and indicies 
     proc = subprocess.check_output("mkdir data/", shell=True)
     proc = subprocess.check_output("mkdir indices/", shell=True)
+    proc = subprocess.check_output("mkdir outputs/", shell=True)
 
     # setup data sources
-    setup_UCSC_GENOMES(config.UCSC_GENOMES, conn)
-    setup_UCSC_HUBS(config.UCSC_HUBS[:-1], conn)
-    setup_LOCAL(config.LOCAL_GENOMES, conn)
+    setup_ucscGenomes(config.UCSC_GENOMES, conn)
+    setup_ucscHubs(config.UCSC_HUBS[:-1], conn)
+    setup_local(config.LOCAL_GENOMES, conn)
 
     conn.commit()
     conn.close()
+    proc = subprocess.check_output("python3 query_indices.py -g outputs/genomes.csv",
+                                    stderr=None,
+                                    shell=True)
