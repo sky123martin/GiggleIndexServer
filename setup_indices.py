@@ -120,6 +120,7 @@ def giggle_sort(path):
         # sort batch of files
         for f in file_list[:batch_size]:
             shutil.move(path+"/"+f, temp_path)
+
         cmd_str = 'giggle/scripts/sort_bed \"{}/*.bed*\" {} {}'.format(temp_path, sorted_path, config.AVAILABLE_PROCCESSES)
         proc = subprocess.check_output(cmd_str,
                                     shell=True,
@@ -148,7 +149,8 @@ def giggle_move_index(path, params):
         os.makedirs(index_path, exist_ok=True)
 
         for f in files:
-            proc = subprocess.check_output("mv {}/{}.bed.gz {}/".format(path, f, index_path), shell=True)
+            shutil.move("{}/{}.bed.gz".format(path, f),index_path)
+            # proc = subprocess.check_output("mv {}/{}.bed.gz {}/".format(path, f, index_path), shell=True)
 
         cmd_str = 'giggle index -i \"{}/*.bed.gz\" -o indices/{}.d  -f -s'.format(index_path, index_name)
         print(cmd_str)

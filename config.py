@@ -25,17 +25,17 @@ class config:
     ###############################
 
     # Max Number of Intervals per Index
-    MAX_INTERVALS_PER_INDEX = 1000000
+    MAX_INTERVALS_PER_INDEX = 10000000
 
     # Number of proccesses available to server
-    AVAILABLE_PROCCESSES = 12
+    AVAILABLE_PROCCESSES = 8
     
     # Max file size (intervals)
-    max_file_size_MB = 5
+    max_file_size_MB = 10
     max_file_size = max_file_size_MB*1000*155 # conversion: ~155 intervals per KB, 1000 KB per MB
 
     # Max file size for setup (intervals)
-    max_setup_file_size_MB = 1
+    max_setup_file_size_MB = 0.5
     max_setup_file_size = max_setup_file_size_MB*1000*155 # conversion: ~155 intervals per KB, 1000 KB per MB
 
     # Timeout on a file download in seconds
@@ -47,7 +47,7 @@ class config:
     example:
         UCSC_GENOMES = ["hg19", "rn6", "petMar2"]
     '''
-    UCSC_GENOMES = ["rn6"]
+    UCSC_GENOMES = ['hg19']
 
     # List local genomes to download and index 
     '''
@@ -120,7 +120,7 @@ class config:
                 # "Ensembl Regulatory Build",
                 # "EPD Viewer Hub",
                 # "Exp/Meth VNTR hub",
-                # "FaceBase Hub",
+                "FaceBase Hub",
                 # "FANTOM5",
                 # "FANTOM5 CAGE RECLU DATA",
                 # "Fish assemblies",
@@ -151,8 +151,8 @@ class config:
                 # "Plant assemblies",
                 # "Polytract Repeats",
                 # "Primate assemblies",
-                # "Primate x4 NeuroDiff and Human CRISPRa",
-                # "Principal Splice Isoforms APPRIS",
+                "Primate x4 NeuroDiff and Human CRISPRa",
+                "Principal Splice Isoforms APPRIS",
                 # "Promoterome CAGE and nucleosome positioning",
                 # "Purple sea star Assembly Hub",
                 # "RefSeqFE Hub",
