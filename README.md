@@ -13,22 +13,6 @@ Clone giggle to use gzip and sorting function
 ```
 git clone https://github.com/ryanlayer/giggle.git
 ```
-Install UCSC utilities for file conversion
-```
-mkdir UCSC_utilities
-
-cd UCSC_utilities
-
-rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/macOSX.x86_64/bigWigToBedGraph ./
-
-rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/macOSX.x86_64/bigBedToBed ./
-
-rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/macOSX.x86_64/bigPslToPsl ./
-
-rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/macOSX.x86_64/pslToBed ./
-
-cd ..
-```
 Create enviorment
 ```
 pip3 install conda
@@ -38,6 +22,21 @@ conda install anaconda
 conda create -n env python=3
 
 conda activate env
+```
+Set up channels
+```
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+```
+
+Install UCSC utilities for file conversion
+```
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+```
+conda install -c bioconda ucsc-bigwigtobedgraph ucsc-bigpsltopsl ucsc-bigbedtobed  ucsc-psltobed
 ```
 
 Install necessary python libararies
